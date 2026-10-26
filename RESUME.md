@@ -8,17 +8,20 @@ checks cover pinned-tab close behavior. The sidebar and Cmd+T bar also received
 native UI smoke checks; see `docs/validation.md`.
 
 The normal development profile is an authorized offline copy of the user's
-Brave profile. A separate `../../work/sidecar-ui-smoke-profile` holds public
+Brave profile. A separate `work/sidecar-ui-smoke-profile` holds public
 example pages used for UI testing. Never point either app at the other's live
 profile directory.
 
 Source downloads, the installed Metal toolchain, and compilation outputs are
-retained. Check `build-state.json` for live status.
+retained under the project-local `work/` directory. After the local move into
+`Dev/`, old paths remain as compatibility links for existing build artifacts.
+Keep those links while reusing this build, which can contain absolute paths.
+Check `build-state.json` for live status.
 
 If another interruption occurs, connect power and run from this directory:
 
 ```sh
-nice -n 15 python3 scripts/develop.py trial > ../../work/sidecar-trial.log 2>&1
+nice -n 15 python3 scripts/develop.py trial > work/sidecar-trial.log 2>&1
 ```
 
 This resumes compilation, runs the native tests, and launches the real custom

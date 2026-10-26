@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 upstream-status.json
 build-state.json
+/work/

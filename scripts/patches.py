@@ -8,7 +8,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CHECKOUT = ROOT.parents[1] / "work/brave-build/src/brave"
+WORK = ROOT / "work"
+DEFAULT_CHECKOUT = WORK / "brave-build/src/brave"
 
 
 def patch_bundle(lock):

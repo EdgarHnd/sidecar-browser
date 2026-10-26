@@ -23,7 +23,7 @@ development branding. Build as Component, with Brave's development channel.
 Do not use `--channel release` with this patch: release branding is deliberately
 untouched and is not a shippable Sidecar product.
 
-The launcher uses `../../work/sidecar-profile`. At the user's explicit request,
+The launcher uses `work/sidecar-profile`. At the user's explicit request,
 a one-time offline copy of their Brave profile populated that directory,
 including encrypted credential databases. The source was never modified;
 cache/lock files were excluded and the previous Sidecar profile was backed up.

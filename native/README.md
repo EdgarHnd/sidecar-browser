@@ -20,9 +20,10 @@ validator has been compiled and tested independently with Foundation.
 Compile the Foundation-only native validator test on macOS:
 
 ```sh
+mkdir -p work
 xcrun clang++ -std=c++20 -fobjc-arc -framework Foundation \
-  tests/update_feed_test.mm -o ../../work/update-feed-test
-../../work/update-feed-test
+  tests/update_feed_test.mm -o work/update-feed-test
+work/update-feed-test
 ```
 
 Release configuration must supply:

@@ -11,10 +11,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from patches import DEFAULT_CHECKOUT, ROOT, git, validate, patch_bundle
+from patches import DEFAULT_CHECKOUT, ROOT, WORK, git, validate, patch_bundle
 from upstream import check
 
-WORK = ROOT.parents[1] / "work"
 STATE = ROOT / "build-state.json"
 
 

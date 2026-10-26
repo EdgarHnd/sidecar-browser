@@ -30,12 +30,14 @@ Those checks do not compile the full browser or certify a distributable release.
 - An integrated native updater feed route targeting signed GitHub Releases.
   The AI schedule was deleted; updates will not depend on Codex.
 
+Local build dependencies, profiles, and logs stay in the Git-ignored `work/`
+folder inside this project, so the project can live anywhere (including `Dev/`).
 The source checkout and large build dependencies live in
-`../../work/brave-build/src/brave`. Node 24 and pnpm are local to
-`../../work/toolchain`; your global toolchain is unchanged. The initialization
-log from the initial attempt is `../../work/brave-init.log`. The active
-initialization/build runner writes `../../work/sidecar-build.log`; the resumed
-build/test/launch runner writes `../../work/sidecar-trial.log`, and
+`work/brave-build/src/brave`. Node 24 and pnpm are local to
+`work/toolchain`; your global toolchain is unchanged. The initialization
+log from the initial attempt is `work/brave-init.log`. The active
+initialization/build runner writes `work/sidecar-build.log`; the resumed
+build/test/launch runner writes `work/sidecar-trial.log`, and
 `build-state.json` records its current phase.
 The existing Brave application and its profile have not been modified.
 
