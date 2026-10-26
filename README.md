@@ -13,16 +13,18 @@ Those checks do not compile the full browser or certify a distributable release.
   brave-core commit in `upstream-lock.json`.
 - A native source patch with a separate macOS development identity, vertical
   tabs on by default, a 260-point sidebar, 36-point tab rows and 6-point gaps.
-- Sidebar navigation controls and an origin chip that opens Brave's native
-  address bar, plus titled pinned-tab rows without a close button.
+- Compact sidebar icon controls and an origin chip that opens Brave's native
+  address bar, plus titled pinned-tab rows without a close button and a bottom
+  New Tab action.
 - A floating **Cmd+T** bar for switching to a matching open tab or opening a
   URL/search in a new tab. Arrow keys select, Return opens, Cmd+Return forces a
-  new tab, and Escape or Cmd+W cancels without creating a tab.
+  new tab, and Escape or Cmd+W cancels without creating a tab. Results include
+  favicons, titles and domains; recent tabs appear first.
 - **Cmd+W on the active pinned tab preserves its pin**, selects another tab,
   and unloads the page when safe. Closing the last pin creates a landing tab.
   Ordinary tabs still close normally.
-- The native development app compiled and launched; all 38 targeted native
-  tests passed on October 26, 2026, along with 22 Python safeguard tests.
+- The native development app compiled and launched; all 39 targeted native
+  tests passed on October 27, 2026, along with 22 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches
@@ -63,17 +65,23 @@ Do not start a duplicate while it runs. To resume individual completed phases,
 use `python3 scripts/develop.py apply`, `python3 scripts/develop.py build`, and
 `python3 scripts/develop.py test`. The wrapper verifies
 the source/patch before building. Compilation defaults to at most four local
-jobs (`SISO_LIMITS=local=4`). Run the wrapper with `nice -n 15` to give other apps
+jobs (`SISO_LIMITS=local=4`); nested Rust builds also default to four jobs
+(`CARGO_BUILD_JOBS=4`). Run the wrapper with `nice -n 15` to give other apps
 priority. `python3 scripts/develop.py launch` uses a dedicated
 development profile and an isolated app identity, and requires a current online source
 check. It launches only the development app, never the regular Brave app.
 
 ## Arc-inspired direction
 
-The sidebar now contains Back, Forward, Reload, the current origin and New Tab.
+The sidebar contains Collapse, Back, Forward, Reload, the current origin and a
+bottom New Tab action. A quiet landing page replaces the dashboard by default.
+The landing-page and bookmarks-bar choices are applied once per regular profile;
+later user changes and managed preferences are preserved.
 Brave's native focus mode hides the top toolbar when appropriate; the sidebar
 address chip and Cmd+L reveal the real omnibox and its site-information controls.
-The toolbar stays visible for external pages with security warnings.
+An expanded sidebar reserves its own space beside the page instead of covering
+page content. The toolbar stays visible for external pages with security warnings. Switching
+tabs no longer briefly reveals the full toolbar over the sidebar.
 
 The command bar currently searches tabs in the current window, then uses the
 profile's default search engine or URL classifier. It does not yet show history,

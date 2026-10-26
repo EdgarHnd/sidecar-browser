@@ -62,3 +62,33 @@ References: [Brave's DRM documentation](https://support.brave.com/hc/en-us/artic
 Signed/notarized release packaging and a working end-to-end built-in updater
 remain separate release gates. The public repository CI does not compile the
 full browser.
+
+## October 27 — shell polish
+
+The native app rebuilt successfully after relocation into Dev. All 39 targeted
+native tests passed: the previous 38 plus a check that the one-time quiet-shell
+setup preserves later user customizations. All 22 Python safeguard tests passed.
+The applied source was verified against the exact patch bundle.
+
+The separate UI test profile confirmed:
+
+- Quiet landing page, compact icon navigation, and a bottom New Tab action.
+- Expanded sidebar occupies its own width; the page is no longer underneath it.
+- Startup and blank tabs opened from Cmd+T do not focus the hidden omnibox.
+- The sidebar address chip still focuses the native omnibox.
+- Cmd+T rows show favicons, titles, domains, pin status, and distinct actions.
+- Most recently used tabs appear first; title filtering switches to a pin.
+- Cmd+W retains a pin and selects another tab; Cmd+W inside the palette cancels
+  without changing the tab list.
+- Settings and the version page load through the native navigation controls.
+
+External-page verification in the fresh test profile was blocked waiting for
+macOS Keychain access. A process sample showed cookie encryption initialization
+waiting in SecItemCopyMatching; a separate HTTPS connectivity check succeeded.
+The protected system prompt requires the user. Encryption and Keychain access
+controls were not bypassed. Diagnostics remain local in the ignored work folder.
+
+The final build was reopened with the existing Sidecar profile. The temporary
+blank tab used for the final focus check was closed afterward.
+
+Both the outer native build and nested Rust compilation default to four jobs.

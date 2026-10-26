@@ -7,36 +7,38 @@
   "brave_core_commit": "52db4b25c0aa3038e9a1c6021428b136cc3cb5fc",
   "chromium_version": "156.0.8078.48",
   "release_url": "https://github.com/brave/brave-browser/releases/tag/v1.98.60",
-  "patch_sha256": "934d894684aa1f13657a143496075074b5b277f98ea5c3bfe76d854987e25ed0",
+  "patch_sha256": "5dd2bf39ed6e115c806e99ae2a86b555b1f555647a1d445cd43a23ae0a357301",
   "patch_files": [
     "app/theme/brave/BRANDING.development",
     "browser/ui/tabs/brave_tab_prefs.cc",
-    "browser/ui/views/tabs/brave_tab_strip_layout_helper.h",
+    "browser/ui/tabs/brave_tab_prefs.h",
     "browser/ui/tabs/test/vertical_tab_controller_unittest.cc",
+    "browser/ui/views/tabs/brave_tab_strip_layout_helper.h",
+    "browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc",
     "browser/mac/sidecar_update_feed.h",
     "browser/mac/sparkle_glue.mm",
     "browser/sources.gni",
     "build/config.gni",
     "BUILD.gn",
     "build/mac/tweak_info_plist.py",
-    "browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc",
-    "browser/ui/sidecar_browser_controls.h",
-    "browser/ui/sidecar_browser_controls.cc",
-    "browser/ui/brave_browser_command_controller.cc",
     "browser/ui/BUILD.gn",
+    "browser/ui/brave_browser_command_controller.cc",
+    "browser/ui/sidecar_browser_controls.cc",
+    "browser/ui/sidecar_browser_controls.h",
+    "browser/ui/sidecar_browser_controls_unittest.cc",
+    "browser/ui/views/frame/brave_browser_view.cc",
+    "browser/ui/views/frame/vertical_tabs/BUILD.gn",
     "browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc",
     "browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h",
-    "browser/ui/views/frame/vertical_tabs/BUILD.gn",
-    "browser/ui/views/frame/brave_browser_view.cc",
-    "browser/ui/views/tabs/brave_tab_strip.cc",
     "browser/ui/views/tabs/brave_tab.cc",
-    "browser/ui/sidecar_browser_controls_unittest.cc"
+    "browser/ui/views/tabs/brave_tab_strip.cc",
+    "components/brave_blank_page/resources/brave_blank_new_tab.html"
   ],
   "artifact_status": "not-built",
   "patches": [
     {
       "file": "patches/0001-sidecar-development-shell.patch",
-      "sha256": "869af103f1d0c188f96aaefac49407e2e8014eee9f7aae01b1919d13e615e215"
+      "sha256": "56d148b20211e0940dcc2ef437c99ac32ef37e67ef068f7ac89833f0ad26f45e"
     },
     {
       "file": "patches/0002-native-update-feed.patch",
@@ -44,7 +46,7 @@
     },
     {
       "file": "patches/0003-sidecar-browser-controls.patch",
-      "sha256": "b32c97736b3435a4062d32dc534726ccefab693777770be3ea147e6a0019221b"
+      "sha256": "a986c99441caf884e779c595d302c0c5035395ea730ee3d4789b7df720eba753"
     }
   ]
 }

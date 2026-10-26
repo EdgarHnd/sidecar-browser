@@ -61,6 +61,7 @@ def verify_applied(checkout, lock, content=None):
 def run(checkout, *args):
     env = os.environ.copy()
     env.setdefault("SISO_LIMITS", "local=4")
+    env.setdefault("CARGO_BUILD_JOBS", "4")
     tool_bin = WORK / "toolchain/node_modules/.bin"
     if not (tool_bin / "node").exists():
         raise ValueError("Local Node 24 toolchain is missing")
@@ -132,7 +133,7 @@ def execute(command, checkout, lock):
         with (WORK / "sidecar-app.log").open("a") as log:
             subprocess.Popen(
                 [str(executable), "--user-data-dir=" + str(WORK / "sidecar-profile"),
-                 "--no-first-run", "--no-default-browser-check", "about:blank"],
+                 "--no-first-run", "--no-default-browser-check", "chrome://newtab/"],
                 stdout=log, stderr=log, start_new_session=True)
         print("Launched Sidecar with its isolated development profile.")
 
