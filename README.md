@@ -14,14 +14,15 @@ from Brave. This is the first development milestone, not a finished browser.
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches
   and unexpected file scope. It never resets a checkout or silently drops edits.
-- A prepared native updater patch targeting signed GitHub Releases.
+- An integrated native updater feed route targeting signed GitHub Releases.
   The AI schedule was deleted; updates will not depend on Codex.
 
 The source checkout and large build dependencies live in
 `../../work/brave-build/src/brave`. Node 24 and pnpm are local to
 `../../work/toolchain`; your global toolchain is unchanged. The initialization
 log from the initial attempt is `../../work/brave-init.log`. The active
-initialization/build/test runner writes `../../work/sidecar-build.log` and
+initialization/build runner writes `../../work/sidecar-build.log`; the resumed
+build/test/launch runner writes `../../work/sidecar-trial.log`, and
 `build-state.json` records its current phase.
 The existing Brave application and its profile have not been modified.
 
@@ -39,8 +40,10 @@ python3 scripts/patches.py
 for an unknown result. A matching source pin is **not** evidence that an
 installed browser is updated, tested, or safe.
 
-The running `python3 scripts/develop.py bootstrap` performs initialization,
+`python3 scripts/develop.py bootstrap` performs initialization,
 patch application, build and tests in order, stopping on the first failure.
+After initialization, `python3 scripts/develop.py trial` builds, tests and
+launches the actual browser; this is the currently running operation.
 Do not start a duplicate while it runs. To resume individual completed phases,
 use `python3 scripts/develop.py apply`, `python3 scripts/develop.py build`, and
 `python3 scripts/develop.py test`. The wrapper verifies

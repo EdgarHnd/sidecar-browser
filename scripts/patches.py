@@ -4,10 +4,26 @@ import argparse
 import hashlib
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CHECKOUT = ROOT.parents[1] / "work/brave-build/src/brave"
+
+
+def patch_bundle(lock):
+    content = b""
+    for item in lock["patches"]:
+        path = (ROOT / item["file"]).resolve()
+        if not path.is_relative_to(ROOT / "patches"):
+            raise ValueError("Patch must be inside the project patch directory")
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != item["sha256"]:
+            raise ValueError("Patch series checksum mismatch")
+        content += data
+    if hashlib.sha256(content).hexdigest() != lock["patch_sha256"]:
+        raise ValueError("Combined patch checksum mismatch")
+    return content
 
 
 def git(checkout, *args):
@@ -36,10 +52,12 @@ def main():
     parser.add_argument("--apply", action="store_true", help="Apply after checks; default checks only")
     args = parser.parse_args()
     lock = json.loads((ROOT / "upstream-lock.json").read_text())
-    patch = ROOT / "patches/0001-sidecar-development-shell.patch"
-    validate(args.checkout, lock, patch)
-    if args.apply:
-        git(args.checkout, "apply", str(patch))
+    with tempfile.TemporaryDirectory() as temp:
+        patch = Path(temp) / "sidecar.patch"
+        patch.write_bytes(patch_bundle(lock))
+        validate(args.checkout, lock, patch)
+        if args.apply:
+            git(args.checkout, "apply", "--intent-to-add", str(patch))
     print("Patch applied" if args.apply else "Patch checks passed; source unchanged")
 
 

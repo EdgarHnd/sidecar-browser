@@ -12,9 +12,10 @@ command-line feed override for Sidecar. Sparkle remains responsible for verifyin
 download signatures and installing the update. URL validation alone is not
 signature verification.
 
-The patch is prepared separately from the running development build so changing
-its input manifest cannot race the initial source synchronization. It has not
-yet been compiled into a browser or exercised in an end-to-end upgrade.
+The patch is integrated into the source after dependency initialization, and
+the build guard verifies the combined patch series byte for byte. The updater
+has not yet been exercised in an end-to-end browser upgrade. Its native feed
+validator has been compiled and tested independently with Foundation.
 
 Compile the Foundation-only native validator test on macOS:
 

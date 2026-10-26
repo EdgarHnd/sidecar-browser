@@ -4,11 +4,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from patches import git, validate
-from develop import verify_applied, normalized_diff
+from develop import verify_applied
 
 
 class PatchTests(unittest.TestCase):
@@ -35,20 +34,13 @@ class PatchTests(unittest.TestCase):
 
     def test_build_guard_accepts_exact_patch(self):
         git(self.root, "apply", str(self.patch))
-        with patch("develop.PATCH", self.patch):
-            verify_applied(self.root, self.lock)
-
-    def test_build_guard_ignores_only_git_function_labels(self):
-        raw = self.patch.read_text()
-        with_label = raw.replace("@@ -1 +1 @@", "@@ -1 +1 @@ void Function() {")
-        self.assertEqual(normalized_diff(raw), normalized_diff(with_label))
-        self.assertNotEqual(normalized_diff(raw), normalized_diff(raw.replace("+new", "+other")))
+        verify_applied(self.root, self.lock, self.patch.read_bytes())
 
     def test_build_guard_rejects_extra_edit_after_application(self):
         git(self.root, "apply", str(self.patch))
         (self.root / "shell.txt").write_text("new\nunreviewed edit\n")
-        with patch("develop.PATCH", self.patch), self.assertRaises(ValueError):
-            verify_applied(self.root, self.lock)
+        with self.assertRaises(ValueError):
+            verify_applied(self.root, self.lock, self.patch.read_bytes())
 
     def test_rejects_different_base(self):
         self.lock["brave_core_commit"] = "0" * 40

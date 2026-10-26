@@ -7,15 +7,14 @@ import hashlib
 import json
 import os
 import plistlib
-import re
 import subprocess
+import tempfile
 from pathlib import Path
 
-from patches import DEFAULT_CHECKOUT, ROOT, git, validate
+from patches import DEFAULT_CHECKOUT, ROOT, git, validate, patch_bundle
 from upstream import check
 
 WORK = ROOT.parents[1] / "work"
-PATCH = ROOT / "patches/0001-sidecar-development-shell.patch"
 STATE = ROOT / "build-state.json"
 
 
@@ -28,24 +27,36 @@ def update_state(**fields):
     tmp.replace(STATE)
 
 
-def normalized_diff(value):
-    chunks = value.strip().split("diff --git ")
-    return sorted("\n".join(re.sub(r"^(@@ .*? @@).*$", r"\1", line)
-                            for line in chunk.splitlines()
-                            if not line.startswith("index ")).strip()
-                  for chunk in chunks if chunk.strip())
-
-
-def verify_applied(checkout, lock):
+def verify_applied(checkout, lock, content=None):
+    if content is None:
+        content = patch_bundle(lock)
     if git(checkout, "rev-parse", "HEAD") != lock["brave_core_commit"]:
         raise ValueError("Wrong Brave source pin")
-    if hashlib.sha256(PATCH.read_bytes()).hexdigest() != lock["patch_sha256"]:
+    if hashlib.sha256(content).hexdigest() != lock["patch_sha256"]:
         raise ValueError("Patch checksum changed")
     if git(checkout, "diff", "--cached", "--name-only"):
         raise ValueError("Unexpected staged source changes")
-    actual = git(checkout, "diff", "--no-ext-diff", "--no-color", "--src-prefix=a/", "--dst-prefix=b/")
-    if normalized_diff(actual) != normalized_diff(PATCH.read_text()):
-        raise ValueError("Source changes differ from the reviewed patch")
+    changed = git(checkout, "diff", "--name-only", "HEAD").splitlines()
+    if sorted(changed) != sorted(lock["patch_files"]):
+        raise ValueError("Changed source file scope differs from the reviewed patch")
+    # Compare file contents, not Git's choice of diff hunk boundaries.
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp).resolve()
+        for name in lock["patch_files"]:
+            file = (root / name).resolve()
+            if not file.is_relative_to(root):
+                raise ValueError("Invalid source path in manifest")
+            original = subprocess.run(["git", "-C", str(checkout), "show", "HEAD:" + name],
+                                      capture_output=True, check=False)
+            if original.returncode == 0:
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(original.stdout)
+        patch = root / "reviewed.patch"
+        patch.write_bytes(content)
+        git(root, "apply", str(patch))
+        for name in lock["patch_files"]:
+            if (root / name).read_bytes() != (checkout / name).read_bytes():
+                raise ValueError("Source contents differ from the reviewed patch: " + name)
 
 
 def run(checkout, *args):
@@ -84,12 +95,15 @@ def execute(command, checkout, lock):
         run(checkout, "pnpm", "run", "init", "--target_arch=arm64", "--no-history", "--lean_sync")
         update_state(stage="dependencies-ready")
     if command in ("bootstrap", "apply"):
-        validate(checkout, lock, PATCH)
-        git(checkout, "apply", str(PATCH))
+        with tempfile.TemporaryDirectory() as temp:
+            patch = Path(temp) / "sidecar.patch"
+            patch.write_bytes(patch_bundle(lock))
+            validate(checkout, lock, patch)
+            git(checkout, "apply", "--intent-to-add", str(patch))
         update_state(stage="ui-patch-applied")
-    if command in ("bootstrap", "build", "test", "launch"):
+    if command in ("bootstrap", "trial", "build", "test", "launch"):
         verify_applied(checkout, lock)
-    if command in ("bootstrap", "build"):
+    if command in ("bootstrap", "trial", "build"):
         update_state(stage="native-build", native_build="running", native_tests="not-run",
                      installed=False, automatic_binary_updates=False)
         run(checkout, "pnpm", "run", "build", "Component", "-C", "Sidecar",
@@ -98,13 +112,13 @@ def execute(command, checkout, lock):
         update_state(stage="native-build-complete", native_build="passed",
                      built_core_commit=lock["brave_core_commit"],
                      built_patch_sha256=lock["patch_sha256"])
-    if command in ("bootstrap", "test"):
+    if command in ("bootstrap", "trial", "test"):
         update_state(stage="native-tests", native_tests="running")
         run(checkout, "pnpm", "run", "test", "brave_unit_tests", "-C", "Sidecar",
             "--filter=VerticalTabControllerUnitTest.*:BraveTabStripLayoutHelperUnitTest.*",
             "--ninja", "j:8")
         update_state(stage="development-build-ready", native_tests="passed")
-    if command == "launch":
+    if command in ("trial", "launch"):
         state = json.loads(STATE.read_text())
         if (state.get("built_core_commit") != lock["brave_core_commit"]
                 or state.get("built_patch_sha256") != lock["patch_sha256"]
@@ -121,7 +135,7 @@ def execute(command, checkout, lock):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["bootstrap", "init", "apply", "build", "test", "launch"])
+    parser.add_argument("command", choices=["bootstrap", "trial", "init", "apply", "build", "test", "launch"])
     parser.add_argument("--checkout", type=Path, default=DEFAULT_CHECKOUT)
     args = parser.parse_args()
     lock = json.loads((ROOT / "upstream-lock.json").read_text())
