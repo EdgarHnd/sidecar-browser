@@ -13,7 +13,9 @@ Those checks do not compile the full browser or certify a distributable release.
   brave-core commit in `upstream-lock.json`.
 - A native source patch with a separate macOS development identity, vertical
   tabs on by default, a 260-point sidebar, 36-point tab rows and 6-point gaps.
-- Updated existing controller tests for the new default and explicit opt-out.
+- Updated controller and layout tests for the new default and spacing.
+- First macOS development build compiled and launched; all 33 targeted native
+  tests passed on October 26, 2026, along with 22 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches
@@ -47,7 +49,7 @@ installed browser is updated, tested, or safe.
 `python3 scripts/develop.py bootstrap` performs initialization,
 patch application, build and tests in order, stopping on the first failure.
 After initialization, `python3 scripts/develop.py trial` builds, tests and
-launches the actual browser; this is the currently running operation.
+launches the actual browser.
 Do not start a duplicate while it runs. To resume individual completed phases,
 use `python3 scripts/develop.py apply`, `python3 scripts/develop.py build`, and
 `python3 scripts/develop.py test`. The wrapper verifies

@@ -1,8 +1,12 @@
 # Resume Sidecar
 
-The first native build was stopped at 8% battery and resumed after AC power
-was connected. Source downloads, the installed Metal toolchain, and completed
-compilation outputs are retained. Check `build-state.json` for live status.
+The first native build completed on October 26, 2026. All 33 targeted native
+checks pass, and Sidecar launched with its isolated development profile. Three
+layout fixtures were updated to account for the custom margins while preserving
+their remainder-distribution and nesting-boundary assertions.
+
+Source downloads, the installed Metal toolchain, and compilation outputs are
+retained. Check `build-state.json` for live status.
 
 If another interruption occurs, connect power and run from this directory:
 

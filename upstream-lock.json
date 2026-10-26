@@ -7,7 +7,7 @@
   "brave_core_commit": "52db4b25c0aa3038e9a1c6021428b136cc3cb5fc",
   "chromium_version": "156.0.8078.48",
   "release_url": "https://github.com/brave/brave-browser/releases/tag/v1.98.60",
-  "patch_sha256": "99c1608c7aa73036a937b72f5ba6ecd005c80d8fe19ba6c80428c041b94f5bb8",
+  "patch_sha256": "4a9a7a232fd7bc0415d37dd2efe60a57d4032b6c60bdd93e43caefb05b05a619",
   "patch_files": [
     "app/theme/brave/BRANDING.development",
     "browser/ui/tabs/brave_tab_prefs.cc",
@@ -18,13 +18,14 @@
     "browser/sources.gni",
     "build/config.gni",
     "BUILD.gn",
-    "build/mac/tweak_info_plist.py"
+    "build/mac/tweak_info_plist.py",
+    "browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc"
   ],
   "artifact_status": "not-built",
   "patches": [
     {
       "file": "patches/0001-sidecar-development-shell.patch",
-      "sha256": "10ee116587706803b48f0d53511fa97959a3d3ef2e177eb1a22a7f1094a06e0d"
+      "sha256": "869af103f1d0c188f96aaefac49407e2e8014eee9f7aae01b1919d13e615e215"
     },
     {
       "file": "patches/0002-native-update-feed.patch",

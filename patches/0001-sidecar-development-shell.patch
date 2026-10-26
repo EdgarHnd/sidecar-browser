@@ -85,3 +85,56 @@ diff --git a/browser/ui/tabs/test/vertical_tab_controller_unittest.cc b/browser/
    auto controller = MakeController();
    EXPECT_FALSE(controller->ShouldShowVerticalTabToggleButton());
  }
+diff --git a/browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc b/browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc
+index 2c0b4e390..080d2dff9 100644
+--- a/browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc
++++ b/browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc
+@@ -210,15 +210,11 @@ TEST(BraveTabStripLayoutHelperUnitTest,
+   tabs.push_back(MakeTabConstraints(TabPinned::kPinned));
+   tabs.push_back(MakeTabConstraints(TabPinned::kPinned));
+ 
+-  // Width that creates extra pixels to distribute.
+-  // When there are three tabs, and width is 150,
+-  // available width would be 150 - kVeriticalTabMargins(4)*2 = 142
+-  // And we need to take away spacing between tabs (2 * 4) = 8
+-  // So effective available width = 134
+-  // Then all three tabs should be based on 134 / 3 = 44 pixels each,
+-  // with 2 extra pixels to distribute, so first two tabs should be 45 pixels
++  // Leave 134 pixels for three tabs: 44 each, plus two to distribute.
++  constexpr int kAvailableWidth =
++      134 + 2 * kMarginForVerticalTabContainers + 2 * kVerticalTabsSpacing;
+   std::vector<gfx::Rect> result;
+-  CalculatePinnedTabsBoundsInGrid(tabs, 150, &result);
++  CalculatePinnedTabsBoundsInGrid(tabs, kAvailableWidth, &result);
+ 
+   ASSERT_EQ(3u, result.size());
+ 
+@@ -434,15 +430,15 @@ TEST(BraveTabStripLayoutHelperUnitTest,
+       /*in_group=*/false, /*tree_height=*/2, /*level=*/2));
+ 
+   // For this width, tree-wide even spacing is less than base offset.
+-  constexpr int kAvailableWidth = 80;
++  const int kAvailableWidth = 2 * kMarginForVerticalTabContainers +
++                              tabs[0].size_info().min_inactive_width + 40;
+   auto [bounds, _] = CalculateVerticalTabBounds(
+       tabs, kAvailableWidth, /*should_layout_pinned_tabs_in_grid=*/false);
+ 
+   ASSERT_EQ(3u, bounds.size());
+ 
+   // Level 0 (root): no offset applied. Level 1 and 2 use narrow offset.
+-  // tree_levels = tree_height + 1 = 3, available = 80 - 2*4 - 32 = 40,
+-  // even_offset_per_level = 40 / 3 = 13.
++  // The 40 pixels left for nesting give 40 / 3 = 13 pixels per level.
+   EXPECT_EQ(kMarginForVerticalTabContainers, bounds[0].x());
+   EXPECT_EQ(kMarginForVerticalTabContainers + 13, bounds[1].x());
+   EXPECT_EQ(kMarginForVerticalTabContainers + 26, bounds[2].x());
+@@ -482,7 +478,8 @@ TEST(BraveTabStripLayoutHelperUnitTest,
+   // even_offset_per_level is 4 / (10 + 1) = 0.
+   // Even though offset_per_level is floored to 1, final offset should be
+   // clamped to preserve tab minimum width.
+-  constexpr int kAvailableWidth = 44;
++  const int kAvailableWidth = 2 * kMarginForVerticalTabContainers +
++                              constraints.size_info().min_inactive_width + 4;
+   auto [bounds, _] = CalculateVerticalTabBounds(
+       tabs, kAvailableWidth, /*should_layout_pinned_tabs_in_grid=*/false);
+ 
