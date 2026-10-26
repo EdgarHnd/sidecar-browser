@@ -61,6 +61,7 @@ def verify_applied(checkout, lock, content=None):
 
 def run(checkout, *args):
     env = os.environ.copy()
+    env.setdefault("SISO_LIMITS", "local=4")
     tool_bin = WORK / "toolchain/node_modules/.bin"
     if not (tool_bin / "node").exists():
         raise ValueError("Local Node 24 toolchain is missing")
@@ -115,7 +116,7 @@ def execute(command, checkout, lock):
     if command in ("bootstrap", "trial", "test"):
         update_state(stage="native-tests", native_tests="running")
         run(checkout, "pnpm", "run", "test", "brave_unit_tests", "-C", "Sidecar",
-            "--filter=VerticalTabControllerUnitTest.*:BraveTabStripLayoutHelperUnitTest.*",
+            "--filter=VerticalTabControllerUnitTest.*:BraveTabStripLayoutHelperUnitTest.*:SidecarPinnedTabTest.*",
             "--ninja", "j:8")
         update_state(stage="development-build-ready", native_tests="passed")
     if command in ("trial", "launch"):
@@ -128,8 +129,12 @@ def execute(command, checkout, lock):
         if check(lock)["source_status"] != "current":
             raise ValueError("Brave stable has changed; update the development build first")
         executable = app_info(checkout)
-        subprocess.Popen([str(executable), "--user-data-dir=" + str(WORK / "sidecar-profile"),
-                          "--no-first-run", "--no-default-browser-check", "about:blank"])
+        # Keep the browser alive when the invoking terminal/session exits.
+        with (WORK / "sidecar-app.log").open("a") as log:
+            subprocess.Popen(
+                [str(executable), "--user-data-dir=" + str(WORK / "sidecar-profile"),
+                 "--no-first-run", "--no-default-browser-check", "about:blank"],
+                stdout=log, stderr=log, start_new_session=True)
         print("Launched Sidecar with its isolated development profile.")
 
 

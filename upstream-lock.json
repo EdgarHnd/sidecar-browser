@@ -7,7 +7,7 @@
   "brave_core_commit": "52db4b25c0aa3038e9a1c6021428b136cc3cb5fc",
   "chromium_version": "156.0.8078.48",
   "release_url": "https://github.com/brave/brave-browser/releases/tag/v1.98.60",
-  "patch_sha256": "4a9a7a232fd7bc0415d37dd2efe60a57d4032b6c60bdd93e43caefb05b05a619",
+  "patch_sha256": "934d894684aa1f13657a143496075074b5b277f98ea5c3bfe76d854987e25ed0",
   "patch_files": [
     "app/theme/brave/BRANDING.development",
     "browser/ui/tabs/brave_tab_prefs.cc",
@@ -19,7 +19,18 @@
     "build/config.gni",
     "BUILD.gn",
     "build/mac/tweak_info_plist.py",
-    "browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc"
+    "browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc",
+    "browser/ui/sidecar_browser_controls.h",
+    "browser/ui/sidecar_browser_controls.cc",
+    "browser/ui/brave_browser_command_controller.cc",
+    "browser/ui/BUILD.gn",
+    "browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc",
+    "browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h",
+    "browser/ui/views/frame/vertical_tabs/BUILD.gn",
+    "browser/ui/views/frame/brave_browser_view.cc",
+    "browser/ui/views/tabs/brave_tab_strip.cc",
+    "browser/ui/views/tabs/brave_tab.cc",
+    "browser/ui/sidecar_browser_controls_unittest.cc"
   ],
   "artifact_status": "not-built",
   "patches": [
@@ -30,6 +41,10 @@
     {
       "file": "patches/0002-native-update-feed.patch",
       "sha256": "0c57a10a5b83cc75c38c40cff2583da7b1cd1820b73eae32333fbeffe406541e"
+    },
+    {
+      "file": "patches/0003-sidecar-browser-controls.patch",
+      "sha256": "b32c97736b3435a4062d32dc534726ccefab693777770be3ea147e6a0019221b"
     }
   ]
 }

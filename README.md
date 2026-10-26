@@ -13,8 +13,15 @@ Those checks do not compile the full browser or certify a distributable release.
   brave-core commit in `upstream-lock.json`.
 - A native source patch with a separate macOS development identity, vertical
   tabs on by default, a 260-point sidebar, 36-point tab rows and 6-point gaps.
-- Updated controller and layout tests for the new default and spacing.
-- First macOS development build compiled and launched; all 33 targeted native
+- Sidebar navigation controls and an origin chip that opens Brave's native
+  address bar, plus titled pinned-tab rows without a close button.
+- A floating **Cmd+T** bar for switching to a matching open tab or opening a
+  URL/search in a new tab. Arrow keys select, Return opens, Cmd+Return forces a
+  new tab, and Escape or Cmd+W cancels without creating a tab.
+- **Cmd+W on the active pinned tab preserves its pin**, selects another tab,
+  and unloads the page when safe. Closing the last pin creates a landing tab.
+  Ordinary tabs still close normally.
+- The native development app compiled and launched; all 38 targeted native
   tests passed on October 26, 2026, along with 22 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
@@ -53,21 +60,48 @@ launches the actual browser.
 Do not start a duplicate while it runs. To resume individual completed phases,
 use `python3 scripts/develop.py apply`, `python3 scripts/develop.py build`, and
 `python3 scripts/develop.py test`. The wrapper verifies
-the source/patch before building. `python3 scripts/develop.py launch` uses a dedicated
-test profile and an isolated app identity, and requires a current online source
+the source/patch before building. Compilation defaults to at most four local
+jobs (`SISO_LIMITS=local=4`). Run the wrapper with `nice -n 15` to give other apps
+priority. `python3 scripts/develop.py launch` uses a dedicated
+development profile and an isolated app identity, and requires a current online source
 check. It launches only the development app, never the regular Brave app.
 
 ## Arc-inspired direction
 
-The first patch establishes the native sidebar baseline. It does not yet move
-the omnibox, implement Spaces, or provide Arc's command palette.
+The sidebar now contains Back, Forward, Reload, the current origin and New Tab.
+Brave's native focus mode hides the top toolbar when appropriate; the sidebar
+address chip and Cmd+L reveal the real omnibox and its site-information controls.
+The toolbar stays visible for external pages with security warnings.
 
-Next: move navigation and the omnibox into the sidebar, simplify the top
-toolbar, refine pinned tabs, then introduce persistent Spaces and a keyboard
-command palette. Keep the existing omnibox's origin display, permission
-indicators and security interstitials. Reuse Brave's tab model and native Views
-components. Do not embed arbitrary sites in an iframe or substitute a WebKit
-wrapper for Brave.
+The command bar currently searches tabs in the current window, then uses the
+profile's default search engine or URL classifier. It does not yet show history,
+bookmark suggestions, or general browser commands. Spaces and folders remain
+future work.
+
+Pin retention currently applies to the active tab's close command (including
+Cmd+W). Pages with unload handlers remain loaded to protect unsaved work. Pin
+reopening keeps its last URL; resetting to an original pinned URL and broader
+bulk/context-menu close behavior remain to be implemented. Unpinning and then
+closing still removes a tab normally.
+
+See [the validation record](docs/validation.md) for tested interactions and
+remaining compatibility work.
+
+## Imported profile and streaming
+
+At the user's request, the local Sidecar profile was populated from a copy of
+their original Brave profile while both apps were closed. The original profile
+was not modified. Password and cookie databases stayed encrypted; no secrets or
+profile data are stored in this repository. The previous Sidecar profile was
+retained as a local backup. Login and Keychain compatibility are not guaranteed.
+
+Netflix playback is unresolved in this development build (reported E100/1044).
+The running app registers Widevine 4.10.3112.0 as enabled, and a protected
+Bitmovin DASH test stream plays. The same Netflix title works in original Brave.
+The build includes Widevine and proprietary codecs, but CDM host verification
+is disabled by the upstream development configuration. That is a compatibility
+lead, not a confirmed explanation for this Netflix error. Use official Brave
+for Netflix while the release/DRM path is investigated.
 
 ## Security update contract
 
@@ -98,7 +132,7 @@ service credentials or signing identities are available to this fork.
 
 Read [the implementation notes](docs/architecture.md) for build and update
 boundaries. Until the release/update path is operational, use official Brave
-for normal browsing and Sidecar only with its separate test profile.
+for normal browsing and keep Sidecar's development profile separate.
 
 ## Sources and licensing
 

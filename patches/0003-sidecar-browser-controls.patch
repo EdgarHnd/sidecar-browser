@@ -1,0 +1,779 @@
+diff --git a/browser/ui/BUILD.gn b/browser/ui/BUILD.gn
+index e30f19d4a..1303388d8 100644
+--- a/browser/ui/BUILD.gn
++++ b/browser/ui/BUILD.gn
+@@ -106,6 +106,9 @@ source_set("ui") {
+     "//brave/components/webcompat/core/common",
+     "//brave/ui/webui/custom_profile_image/buildflags",
+     "//chrome/browser:command_updater_impl",
++    "//chrome/browser/autocomplete",
++    "//chrome/browser/resource_coordinator",
++    "//components/omnibox/browser",
+     "//chrome/browser:defaults",
+     "//chrome/browser:file_select_helper",
+     "//chrome/browser/contextual_search",
+@@ -390,6 +393,8 @@ source_set("ui") {
+       "brave_view_ids.h",
+       "browser_commands.cc",
+       "browser_commands.h",
++      "sidecar_browser_controls.cc",
++      "sidecar_browser_controls.h",
+       "browser_dialogs.h",
+       "content_settings/brave_autoplay_blocked_image_model.cc",
+       "content_settings/brave_autoplay_blocked_image_model.h",
+@@ -1625,6 +1630,7 @@ source_set("unit_tests") {
+     testonly = true
+     sources = [
+       "brave_file_select_utils_unittest.cc",
++      "sidecar_browser_controls_unittest.cc",
+       "brave_layout_constants_unittest.cc",
+       "brave_scheme_utils_unittest.cc",
+       "managed_ui_unittest.cc",
+@@ -1637,6 +1643,7 @@ source_set("unit_tests") {
+       "//brave/browser/ui/tabs:tabs_public",
+       "//brave/components/l10n/common:test_support",
+       "//chrome/browser/ui",
++      "//chrome/test:test_support",
+       "//chrome/browser/ui/tabs:features",
+       "//components/javascript_dialogs",
+       "//components/prefs:test_support",
+diff --git a/browser/ui/brave_browser_command_controller.cc b/browser/ui/brave_browser_command_controller.cc
+index f77b1070c..954434fea 100644
+--- a/browser/ui/brave_browser_command_controller.cc
++++ b/browser/ui/brave_browser_command_controller.cc
+@@ -4,6 +4,7 @@
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "brave/browser/ui/brave_browser_command_controller.h"
++#include "brave/browser/ui/sidecar_browser_controls.h"
+ 
+ #include <optional>
+ 
+@@ -253,6 +254,18 @@ bool BraveBrowserCommandController::ExecuteCommandWithDispositionAndContext(
+     WindowOpenDisposition disposition,
+     std::optional<actions::ActionInvocationContext> context,
+     base::TimeTicks time_stamp) {
++  if (browser_->GetType() == BrowserWindowInterface::TYPE_NORMAL &&
++      IsCommandEnabled(id)) {
++    if (id == IDC_NEW_TAB) {
++      sidecar::ShowCommandBar(&browser_.get());
++      return true;
++    }
++    if (id == IDC_CLOSE_TAB &&
++        (sidecar::CloseCommandBar(&browser_.get()) ||
++         sidecar::ClosePinnedTab(&browser_.get()))) {
++      return true;
++    }
++  }
+   return IsBraveCommands(id) || IsBraveOverrideCommands(id)
+              ? ExecuteBraveCommandWithDisposition(id, disposition, time_stamp)
+              : BrowserCommandController::
+diff --git a/browser/ui/sidecar_browser_controls.cc b/browser/ui/sidecar_browser_controls.cc
+new file mode 100644
+index 000000000..31844ad89
+--- /dev/null
++++ b/browser/ui/sidecar_browser_controls.cc
+@@ -0,0 +1,315 @@
++// Copyright 2026 The Sidecar Authors. MPL-2.0.
++#include "brave/browser/ui/sidecar_browser_controls.h"
++
++#include <algorithm>
++#include <map>
++#include <memory>
++#include <string>
++#include <vector>
++
++#include "base/functional/bind.h"
++#include "base/memory/raw_ptr.h"
++#include "base/no_destructor.h"
++#include "base/strings/string_util.h"
++#include "base/strings/utf_string_conversions.h"
++#include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
++#include "chrome/browser/ui/browser_commands.h"
++#include "chrome/browser/ui/browser_window.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/navigator/browser_navigator.h"
++#include "chrome/browser/ui/navigator/browser_navigator_params.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/views/frame/browser_view.h"
++#include "components/omnibox/browser/autocomplete_classifier.h"
++#include "components/omnibox/browser/autocomplete_match.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/web_contents.h"
++#include "ui/base/metadata/metadata_impl_macros.h"
++#include "ui/color/color_id.h"
++#include "ui/events/event.h"
++#include "ui/events/keycodes/keyboard_codes.h"
++#include "ui/gfx/geometry/insets.h"
++#include "ui/views/background.h"
++#include "ui/views/border.h"
++#include "ui/views/controls/button/label_button.h"
++#include "ui/views/controls/label.h"
++#include "ui/views/controls/textfield/textfield.h"
++#include "ui/views/controls/textfield/textfield_controller.h"
++#include "ui/views/layout/box_layout.h"
++#include "ui/views/widget/widget.h"
++#include "ui/views/widget/widget_observer.h"
++#include "ui/views/window/dialog_delegate.h"
++
++namespace sidecar {
++namespace {
++
++using CommandBarMap =
++    std::map<BrowserWindowInterface*, base::WeakPtr<views::Widget>>;
++CommandBarMap& CommandBars() {
++  static base::NoDestructor<CommandBarMap> bars;
++  return *bars;
++}
++
++class CommandBar : public views::View,
++                   public views::TextfieldController,
++                   public views::WidgetObserver {
++  METADATA_HEADER(CommandBar, views::View)
++ public:
++  explicit CommandBar(BrowserWindowInterface* browser)
++      : browser_(browser->GetWeakPtr()) {
++    AddAccelerator(ui::Accelerator(ui::VKEY_W, ui::EF_PLATFORM_ACCELERATOR));
++    SetBackground(
++        views::CreateRoundedRectBackground(ui::kColorPrimaryBackground, 16));
++    auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
++        views::BoxLayout::Orientation::kVertical, gfx::Insets(18), 12));
++    input_ = AddChildView(std::make_unique<views::Textfield>());
++    input_->SetController(this);
++    input_->SetPlaceholderText(u"Search or enter a URL…");
++    input_->SetAccessibleName(u"Search or enter a URL");
++    input_->SetFontList(input_->GetFontList().DeriveWithSizeDelta(6));
++    input_->SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(12, 8)));
++    input_->SetBackgroundColor(ui::kColorPrimaryBackground);
++
++    results_ = AddChildView(std::make_unique<views::View>());
++    results_->SetLayoutManager(std::make_unique<views::BoxLayout>(
++        views::BoxLayout::Orientation::kVertical, gfx::Insets(), 4));
++    layout->SetFlexForView(results_, 1);
++    auto* hint = AddChildView(std::make_unique<views::Label>(
++        u"↑ ↓ Choose    Return Open    ⌘ Return New tab    Esc Cancel"));
++    hint->SetEnabledColor(ui::kColorSecondaryForeground);
++    hint->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++    Refresh();
++  }
++
++  views::Textfield* input() const { return input_; }
++
++  void AddedToWidget() override {
++    views::View::AddedToWidget();
++    GetWidget()->AddObserver(this);
++  }
++
++  void OnWidgetDestroying(views::Widget* widget) override {
++    widget->RemoveObserver(this);
++  }
++
++  void OnWidgetActivationChanged(views::Widget* widget, bool active) override {
++    if (!active) {
++      widget->Close();
++    }
++  }
++
++  bool AcceleratorPressed(const ui::Accelerator& accelerator) override {
++    GetWidget()->Close();
++    return true;
++  }
++
++  bool HandleKeyEvent(views::Textfield*, const ui::KeyEvent& event) override {
++    if (event.type() != ui::EventType::kKeyPressed) {
++      return false;
++    }
++    if (event.key_code() == ui::VKEY_ESCAPE) {
++      GetWidget()->Close();
++      return true;
++    }
++    if (event.key_code() == ui::VKEY_RETURN) {
++      Open(event.IsCommandDown() ? targets_.size() - 1 : selected_);
++      return true;
++    }
++    if (event.key_code() == ui::VKEY_DOWN || event.key_code() == ui::VKEY_UP) {
++      const int count = static_cast<int>(buttons_.size());
++      if (count) {
++        selected_ =
++            (selected_ + (event.key_code() == ui::VKEY_DOWN ? 1 : -1) + count) %
++            count;
++        UpdateSelection();
++      }
++      return true;
++    }
++    return false;
++  }
++
++  void ContentsChanged(views::Textfield*, const std::u16string&) override {
++    Refresh();
++  }
++
++ private:
++  void Refresh() {
++    buttons_.clear();
++    targets_.clear();
++    results_->RemoveAllChildViews();
++    selected_ = 0;
++    if (!browser_) {
++      return;
++    }
++    const auto query = base::ToLowerASCII(input_->GetText());
++    auto* model = browser_->GetTabStripModel();
++    for (int i = 0; i < model->count() && targets_.size() < 6; ++i) {
++      auto* contents = model->GetWebContentsAt(i);
++      if (i == model->active_index() && query.empty()) {
++        continue;
++      }
++      const auto searchable = base::ToLowerASCII(
++          contents->GetTitle() + u" " +
++          base::UTF8ToUTF16(contents->GetVisibleURL().spec()));
++      if (!query.empty() && searchable.find(query) == std::u16string::npos) {
++        continue;
++      }
++      AddResult((model->IsTabPinned(i) ? u"Pinned  ·  " : u"Tab  ·  ") +
++                    (contents->GetTitle().empty()
++                         ? base::UTF8ToUTF16(contents->GetVisibleURL().spec())
++                         : contents->GetTitle()),
++                contents->GetWeakPtr());
++    }
++    AddResult(query.empty() ? u"New blank tab"
++                            : std::u16string(u"Open / search  ·  ") +
++                                  std::u16string(input_->GetText()),
++              nullptr);
++    UpdateSelection();
++    SetPreferredSize(gfx::Size(580, 116 + 42 * buttons_.size()));
++    if (GetWidget()) {
++      GetWidget()->SetSize(
++          gfx::Size(GetWidget()->GetWindowBoundsInScreen().width(),
++                    GetPreferredSize().height()));
++    }
++    InvalidateLayout();
++  }
++
++  void AddResult(const std::u16string& title,
++                 base::WeakPtr<content::WebContents> contents) {
++    const size_t index = targets_.size();
++    targets_.push_back(contents);
++    auto* button = results_->AddChildView(std::make_unique<views::LabelButton>(
++        base::BindRepeating(&CommandBar::Open, base::Unretained(this), index),
++        title));
++    button->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++    button->SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(8, 10)));
++    button->SetPreferredSize(gfx::Size(0, 38));
++    button->SetTooltipText(title);
++    buttons_.push_back(button);
++  }
++
++  void UpdateSelection() {
++    for (size_t i = 0; i < buttons_.size(); ++i) {
++      buttons_[i]->SetBackground(views::CreateRoundedRectBackground(
++          static_cast<int>(i) == selected_ ? ui::kColorItemSelectionBackground
++                                           : ui::kColorPrimaryBackground,
++          8));
++    }
++  }
++
++  void Open(size_t index) {
++    if (!browser_ || index >= targets_.size()) {
++      return;
++    }
++    auto* model = browser_->GetTabStripModel();
++    if (auto contents = targets_[index]) {
++      const int tab_index = model->GetIndexOfWebContents(contents.get());
++      if (tab_index >= 0) {
++        model->ActivateTabAt(tab_index);
++      }
++    } else if (index + 1 == targets_.size()) {
++      std::u16string text;
++      base::TrimWhitespace(input_->GetText(), base::TRIM_ALL, &text);
++      if (text.empty()) {
++        chrome::NewTab(browser_.get(), NewTabTypes::kNewTabCommand);
++      } else {
++        AutocompleteMatch match;
++        AutocompleteClassifierFactory::GetForProfile(browser_->GetProfile())
++            ->Classify(text, false, false, metrics::OmniboxEventProto::BLANK,
++                       &match, nullptr);
++        if (!match.destination_url.is_valid() ||
++            match.destination_url.SchemeIs("javascript")) {
++          return;
++        }
++        NavigateParams params(browser_.get(), match.destination_url,
++                              ui::PAGE_TRANSITION_TYPED);
++        params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
++        Navigate(&params);
++      }
++    } else {
++      Refresh();
++      return;
++    }
++    GetWidget()->Close();
++  }
++
++  base::WeakPtr<BrowserWindowInterface> browser_;
++  raw_ptr<views::Textfield> input_ = nullptr;
++  raw_ptr<views::View> results_ = nullptr;
++  std::vector<raw_ptr<views::LabelButton>> buttons_;
++  std::vector<base::WeakPtr<content::WebContents>> targets_;
++  int selected_ = 0;
++};
++BEGIN_METADATA(CommandBar)
++END_METADATA
++}  // namespace
++
++void ShowCommandBar(BrowserWindowInterface* browser) {
++  auto* bars = &CommandBars();
++  std::erase_if(*bars, [](const auto& entry) { return !entry.second; });
++  auto it = bars->find(browser);
++  if (it != bars->end()) {
++    it->second->Activate();
++    return;
++  }
++  auto delegate = std::make_unique<views::DialogDelegate>();
++  delegate->SetButtons(0);
++  delegate->SetShowTitle(false);
++  delegate->SetShowCloseButton(false);
++  delegate->SetTitle(u"Search or enter a URL");
++  delegate->set_margins(gfx::Insets(0));
++  auto* bar = delegate->SetContentsView(std::make_unique<CommandBar>(browser));
++  delegate->SetInitiallyFocusedView(bar->input());
++  auto* widget = views::DialogDelegate::CreateDialogWidget(
++      std::move(delegate), browser->GetWindow()->GetNativeWindow(),
++      BrowserView::GetBrowserViewForBrowser(browser)
++          ->GetWidget()
++          ->GetNativeView());
++  (*bars)[browser] = widget->GetWeakPtr();
++  auto bounds = browser->GetWindow()->GetBounds();
++  const int width = std::min(580, std::max(280, bounds.width() - 40));
++  widget->SetBounds(gfx::Rect(bounds.CenterPoint().x() - width / 2,
++                              bounds.y() + std::min(130, bounds.height() / 5),
++                              width, bar->GetPreferredSize().height()));
++  widget->Show();
++}
++
++bool CloseCommandBar(BrowserWindowInterface* browser) {
++  auto& bars = CommandBars();
++  auto it = bars.find(browser);
++  if (it == bars.end() || !it->second || it->second->IsClosed()) {
++    return false;
++  }
++  it->second->Close();
++  bars.erase(it);
++  return true;
++}
++
++bool ClosePinnedTab(BrowserWindowInterface* browser) {
++  auto* model = browser->GetTabStripModel();
++  const int index = model->active_index();
++  if (index < 0 || !model->IsTabPinned(index)) {
++    return false;
++  }
++  auto contents = model->GetWebContentsAt(index)->GetWeakPtr();
++  const bool can_unload = !contents->NeedToFireBeforeUnloadOrUnloadEvents();
++  // Preserve pages with unload handlers (e.g. unsaved forms) instead of
++  // silently discarding them. The pin stays available regardless of unloading
++  // support.
++  if (model->count() == 1) {
++    chrome::NewTab(browser, NewTabTypes::kNoUserAction);
++  } else {
++    model->ActivateTabAt(index + 1 < model->count() ? index + 1 : index - 1);
++  }
++  if (contents && can_unload) {
++    if (auto* lifecycle =
++            resource_coordinator::TabLifecycleUnitExternal::FromWebContents(
++                contents.get())) {
++      lifecycle->DiscardTab(mojom::LifecycleUnitDiscardReason::EXTERNAL);
++    }
++  }
++  return true;
++}
++}  // namespace sidecar
+diff --git a/browser/ui/sidecar_browser_controls.h b/browser/ui/sidecar_browser_controls.h
+new file mode 100644
+index 000000000..f2c2565fc
+--- /dev/null
++++ b/browser/ui/sidecar_browser_controls.h
+@@ -0,0 +1,11 @@
++// Copyright 2026 The Sidecar Authors. MPL-2.0.
++#ifndef BRAVE_BROWSER_UI_SIDECAR_BROWSER_CONTROLS_H_
++#define BRAVE_BROWSER_UI_SIDECAR_BROWSER_CONTROLS_H_
++
++class BrowserWindowInterface;
++namespace sidecar {
++void ShowCommandBar(BrowserWindowInterface* browser);
++bool CloseCommandBar(BrowserWindowInterface* browser);
++bool ClosePinnedTab(BrowserWindowInterface* browser);
++}  // namespace sidecar
++#endif
+diff --git a/browser/ui/sidecar_browser_controls_unittest.cc b/browser/ui/sidecar_browser_controls_unittest.cc
+new file mode 100644
+index 000000000..d9c50a8f1
+--- /dev/null
++++ b/browser/ui/sidecar_browser_controls_unittest.cc
+@@ -0,0 +1,74 @@
++// Copyright 2026 The Sidecar Authors. MPL-2.0.
++#include "brave/browser/ui/sidecar_browser_controls.h"
++
++#include "chrome/browser/chrome_content_browser_client.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/test/base/browser_with_test_window_test.h"
++#include "content/public/browser/content_browser_client.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/common/content_client.h"
++#include "testing/gtest/include/gtest/gtest.h"
++#include "url/gurl.h"
++
++class SidecarPinnedTabTest : public BrowserWithTestWindowTest {
++ public:
++  void SetUp() override {
++    previous_client_ = content::SetBrowserClientForTesting(&browser_client_);
++    BrowserWithTestWindowTest::SetUp();
++  }
++  void TearDown() override {
++    BrowserWithTestWindowTest::TearDown();
++    content::SetBrowserClientForTesting(previous_client_);
++  }
++
++ private:
++  ChromeContentBrowserClient browser_client_;
++  raw_ptr<content::ContentBrowserClient> previous_client_ = nullptr;
++};
++
++TEST_F(SidecarPinnedTabTest, EmptyWindowFallsThrough) {
++  EXPECT_FALSE(sidecar::ClosePinnedTab(browser()));
++}
++
++TEST_F(SidecarPinnedTabTest, RegularTabUsesNormalClose) {
++  AddTab(browser(), GURL("https://example.test/regular"));
++  EXPECT_FALSE(sidecar::ClosePinnedTab(browser()));
++  EXPECT_EQ(1, browser()->GetTabStripModel()->count());
++}
++
++TEST_F(SidecarPinnedTabTest, CloseKeepsPinAndSelectsAnotherTab) {
++  AddTab(browser(), GURL("https://example.test/pin"));
++  auto* model = browser()->GetTabStripModel();
++  model->SetTabPinned(0, true);
++  AddTab(browser(), GURL("https://example.test/regular"));
++  model->ActivateTabAt(0);
++  EXPECT_TRUE(sidecar::ClosePinnedTab(browser()));
++  EXPECT_EQ(2, model->count());
++  EXPECT_TRUE(model->IsTabPinned(0));
++  EXPECT_EQ(1, model->active_index());
++  EXPECT_EQ(GURL("https://example.test/pin"),
++            model->GetWebContentsAt(0)->GetVisibleURL());
++}
++
++TEST_F(SidecarPinnedTabTest, LastPinKeepsWindowAndCreatesLandingTab) {
++  AddTab(browser(), GURL("https://example.test/pin"));
++  auto* model = browser()->GetTabStripModel();
++  model->SetTabPinned(0, true);
++  EXPECT_TRUE(sidecar::ClosePinnedTab(browser()));
++  EXPECT_EQ(2, model->count());
++  EXPECT_TRUE(model->IsTabPinned(0));
++  EXPECT_FALSE(model->IsTabPinned(model->active_index()));
++}
++
++TEST_F(SidecarPinnedTabTest, RepeatedCloseNeverRemovesPin) {
++  AddTab(browser(), GURL("https://example.test/pin"));
++  auto* model = browser()->GetTabStripModel();
++  model->SetTabPinned(0, true);
++  for (int attempt = 0; attempt < 3; ++attempt) {
++    model->ActivateTabAt(0);
++    EXPECT_TRUE(sidecar::ClosePinnedTab(browser()));
++    EXPECT_EQ(2, model->count());
++    EXPECT_TRUE(model->IsTabPinned(0));
++  }
++}
+diff --git a/browser/ui/views/frame/brave_browser_view.cc b/browser/ui/views/frame/brave_browser_view.cc
+index 5c4003575..a9b097edb 100644
+--- a/browser/ui/views/frame/brave_browser_view.cc
++++ b/browser/ui/views/frame/brave_browser_view.cc
+@@ -402,6 +402,7 @@ BraveBrowserView::BraveBrowserView(BrowserWindowInterface* browser)
+   if (BrowserSupportsFocusMode(browser_)) {
+     auto* controller = browser_->GetFeatures().focus_mode_controller();
+     CHECK(controller);
++    controller->SetEnabled(true);
+     focus_mode_observation_.Observe(controller);
+ 
+     if (features::kFocusModeUrlDisplay.Get() ==
+@@ -1452,6 +1453,13 @@ void BraveBrowserView::UpdateFocusModeState() {
+ }
+ 
+ bool BraveBrowserView::ShouldDisableFocusModeForActiveTab() const {
++  if (auto* contents = browser()->tab_strip_model()->GetActiveWebContents()) {
++    const auto& url = contents->GetVisibleURL();
++    if (url.SchemeIs("chrome") || url.SchemeIs("brave") ||
++        url.spec() == "about:blank") {
++      return false;
++    }
++  }
+   auto* location_bar = GetLocationBar();
+   if (!location_bar) {
+     return true;
+diff --git a/browser/ui/views/frame/vertical_tabs/BUILD.gn b/browser/ui/views/frame/vertical_tabs/BUILD.gn
+index 7de8ab7e5..31b80d169 100644
+--- a/browser/ui/views/frame/vertical_tabs/BUILD.gn
++++ b/browser/ui/views/frame/vertical_tabs/BUILD.gn
+@@ -31,6 +31,8 @@ source_set("vertical_tabs") {
+     "//chrome/browser/profiles",
+     "//chrome/browser/themes",
+     "//chrome/browser/ui:ui_features",
++    "//chrome/browser/ui:browser_commands",
++    "//content/public/browser",
+     "//chrome/browser/ui/color:color_headers",
+     "//chrome/browser/ui/color:mixers",
+     "//chrome/browser/ui/exclusive_access",
+diff --git a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
+index c5887df11..03626389f 100644
+--- a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
++++ b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
+@@ -5,6 +5,18 @@
+ 
+ #include "brave/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h"
+ 
++#include "base/strings/utf_string_conversions.h"
++#include "chrome/app/chrome_command_ids.h"
++#include "chrome/browser/ui/browser_commands.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/web_contents.h"
++#include "ui/color/color_id.h"
++#include "ui/views/background.h"
++#include "ui/views/border.h"
++#include "ui/views/controls/button/label_button.h"
++
+ #include <algorithm>
+ #include <memory>
+ #include <optional>
+@@ -87,6 +99,75 @@ namespace {
+ constexpr int kSeparatorHeight = 1;
+ constexpr int kBorderThickness = 1;
+ 
++class SidecarSidebarHeader : public views::View,
++                             public TabStripModelObserver {
++  METADATA_HEADER(SidecarSidebarHeader, views::View)
++ public:
++  explicit SidecarSidebarHeader(BrowserWindowInterface* browser)
++      : browser_(browser->GetWeakPtr()) {
++    SetLayoutManager(std::make_unique<views::BoxLayout>(
++        views::BoxLayout::Orientation::kVertical, gfx::Insets::VH(4, 8), 4));
++    auto* row = AddChildView(std::make_unique<views::View>());
++    row->SetLayoutManager(std::make_unique<views::BoxLayout>(
++        views::BoxLayout::Orientation::kHorizontal, gfx::Insets(), 6));
++    back_ = AddCommand(row, u"←", u"Back", IDC_BACK);
++    forward_ = AddCommand(row, u"→", u"Forward", IDC_FORWARD);
++    AddCommand(row, u"↻", u"Reload", IDC_RELOAD);
++    auto* name = row->AddChildView(std::make_unique<views::Label>(u"Sidecar"));
++    name->SetEnabledColor(ui::kColorSecondaryForeground);
++    address_ = AddCommand(this, u"Search or enter URL", u"Address and site information",
++                           IDC_FOCUS_LOCATION);
++    address_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++    address_->SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(8, 12)));
++    address_->SetBackground(views::CreateRoundedRectBackground(
++        ui::kColorSubtleEmphasisBackground, 10));
++    browser->GetTabStripModel()->AddObserver(this);
++    Update();
++  }
++
++  void OnTabStripModelChanged(TabStripModel*, const TabStripModelChange&,
++                             const TabStripSelectionChange&) override {
++    Update();
++  }
++  void OnTabChangedAt(tabs::TabInterface*, TabChangeType) override { Update(); }
++
++ private:
++  views::LabelButton* AddCommand(views::View* parent,
++                                const std::u16string& text,
++                                const std::u16string& tooltip, int command) {
++    auto* button = parent->AddChildView(std::make_unique<views::LabelButton>(
++        base::BindRepeating([](base::WeakPtr<BrowserWindowInterface> browser,
++                              int id) {
++          if (browser) {
++            chrome::ExecuteCommand(browser.get(), id);
++          }
++        }, browser_, command), text));
++    button->SetTooltipText(tooltip);
++    button->SetAccessibleName(tooltip);
++    button->SetMinSize(gfx::Size(32, 32));
++    return button;
++  }
++  void Update() {
++    if (!browser_) {
++      return;
++    }
++    auto* contents = browser_->GetTabStripModel()->GetActiveWebContents();
++    back_->SetEnabled(contents && contents->GetController().CanGoBack());
++    forward_->SetEnabled(contents && contents->GetController().CanGoForward());
++    const GURL url = contents ? contents->GetVisibleURL() : GURL();
++    address_->SetText(url.has_host()
++                          ? base::UTF8ToUTF16(url.DeprecatedGetOriginAsURL().spec())
++                          : u"Search or enter URL");
++    address_->SetTooltipText(base::UTF8ToUTF16(url.spec()));
++  }
++  base::WeakPtr<BrowserWindowInterface> browser_;
++  raw_ptr<views::LabelButton> address_ = nullptr;
++  raw_ptr<views::LabelButton> back_ = nullptr;
++  raw_ptr<views::LabelButton> forward_ = nullptr;
++};
++BEGIN_METADATA(SidecarSidebarHeader)
++END_METADATA
++
+ class ShortcutBox : public views::View {
+   METADATA_HEADER(ShortcutBox, views::View)
+  public:
+@@ -310,6 +391,7 @@ BraveVerticalTabStripRegionView::BraveVerticalTabStripRegionView(
+   // The default state is kExpanded, so reset animation state to 1.0.
+   width_animation_.Reset(1.0);
+ 
++  sidecar_header_ = AddChildView(std::make_unique<SidecarSidebarHeader>(browser_));
+   region_view_container_ = AddChildView(std::make_unique<views::View>());
+   region_view_container_->SetLayoutManager(
+       std::make_unique<views::FillLayout>());
+@@ -323,8 +405,9 @@ BraveVerticalTabStripRegionView::BraveVerticalTabStripRegionView(
+   separator_->SetBackground(
+       views::CreateSolidBackground(kColorBraveVerticalTabSeparator));
+   new_tab_button_ = AddChildView(std::make_unique<VerticalTabNewTabButton>(
+-      base::BindRepeating(&TabStrip::NewTabButtonPressed,
+-                          base::Unretained(original_region_view_->tab_strip_)),
++      base::BindRepeating([](BrowserWindowInterface* browser) {
++        chrome::ExecuteCommand(browser, IDC_NEW_TAB);
++      }, browser_),
+       GetShortcutTextForNewTabButton(browser_view), browser_));
+ 
+   resize_area_ = AddChildView(std::make_unique<ResettableResizeArea>(this));
+@@ -701,34 +784,26 @@ void BraveVerticalTabStripRegionView::Layout(PassKey) {
+   }
+ 
+   const auto contents_bounds = GetContentsBounds();
+-
+-  constexpr int kNewTabButtonHeight = tabs::kVerticalTabHeight;
+-  const int contents_view_max_height =
+-      contents_bounds.height() - tabs::kMarginForVerticalTabContainers -
+-      kNewTabButtonHeight - tabs::kMarginForVerticalTabContainers -
+-      kSeparatorHeight;
+-  // Using tab_container_'s preferred height because tab_strip's preferred
+-  // height could be 0 in tests.
+-  const int contents_view_preferred_height =
++  const bool expanded = state_ != State::kCollapsed;
++  const int header_height = expanded ? 84 : 0;
++  sidecar_header_->SetVisible(expanded);
++  sidecar_header_->SetBounds(contents_bounds.x(), contents_bounds.y(),
++                             contents_bounds.width(), header_height);
++  gfx::Rect new_tab_bounds(contents_bounds.x(),
++                           contents_bounds.y() + header_height,
++                           contents_bounds.width(), tabs::kVerticalTabHeight);
++  new_tab_bounds.Inset(gfx::Insets::VH(0, tabs::kMarginForVerticalTabContainers));
++  new_tab_button_->SetBoundsRect(new_tab_bounds);
++  const int separator_y = new_tab_bounds.bottom() + tabs::kVerticalTabsSpacing;
++  separator_->SetBounds(new_tab_bounds.x(), separator_y, new_tab_bounds.width(),
++                         kSeparatorHeight);
++  const int tabs_y = separator_y + kSeparatorHeight + tabs::kVerticalTabsSpacing;
++  const int max_height = std::max(0, contents_bounds.bottom() - tabs_y);
++  const int preferred_height =
+       tab_strip()->tab_container_->GetPreferredSize().height();
+-
+-  region_view_container_->SetBoundsRect(gfx::Rect(
+-      contents_bounds.origin(),
+-      gfx::Size(
+-          contents_bounds.width(),
+-          std::min(contents_view_max_height, contents_view_preferred_height))));
+-
+-  gfx::Rect separator_bounds(
+-      region_view_container_->bounds().bottom_left(),
+-      gfx::Size(contents_bounds.width(), kSeparatorHeight));
+-  separator_bounds.Inset(
+-      gfx::Insets::VH(0, tabs::kMarginForVerticalTabContainers));
+-  separator_->SetBoundsRect(separator_bounds);
+-  gfx::Rect new_tab_button_bounds(
+-      separator_->bounds().bottom_left(),
+-      gfx::Size(separator_bounds.width(), kNewTabButtonHeight));
+-  new_tab_button_bounds.Offset(0, tabs::kMarginForVerticalTabContainers);
+-  new_tab_button_->SetBoundsRect(new_tab_button_bounds);
++  region_view_container_->SetBounds(contents_bounds.x(), tabs_y,
++                                    contents_bounds.width(),
++                                    std::min(max_height, preferred_height));
+ 
+   // Put resize area, overlapped with contents.
+   if (vertical_tab_on_right_.GetPrefName().empty()) {
+@@ -986,7 +1061,8 @@ int BraveVerticalTabStripRegionView::GetTabStripViewportMaxHeight() const {
+   // the actual viewport height.
+   return GetContentsBounds().height() -
+          (separator_->height() + tabs::kMarginForVerticalTabContainers) -
+-         new_tab_button_->height();
++         new_tab_button_->height() -
++         (state_ != State::kCollapsed ? 84 : 0) - tabs::kVerticalTabsSpacing;
+ }
+ 
+ void BraveVerticalTabStripRegionView::ResetExpandedWidth() {
+diff --git a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h
+index fcdb268f2..e3d404c1e 100644
+--- a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h
++++ b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h
+@@ -226,6 +226,7 @@ class BraveVerticalTabStripRegionView : public views::View,
+   // TabStripRegionView with a container view. We're not sure why this is the
+   // case, but this seems to fix the issue.
+   // https://github.com/brave/brave-browser/issues/51719
++  raw_ptr<views::View> sidecar_header_ = nullptr;
+   raw_ptr<views::View> region_view_container_ = nullptr;
+ 
+   // Separator between tabs and new tab button.
+diff --git a/browser/ui/views/tabs/brave_tab.cc b/browser/ui/views/tabs/brave_tab.cc
+index 6e60f3ea4..d6b5bcf9b 100644
+--- a/browser/ui/views/tabs/brave_tab.cc
++++ b/browser/ui/views/tabs/brave_tab.cc
+@@ -372,6 +372,7 @@ void BraveTab::UpdateIconVisibility() {
+ 
+   const auto is_at_min_width = IsAtMinWidthForVerticalTabStrip();
+   if (data().pinned) {
++    showing_close_button_ = false;
+     if (is_at_min_width) {
+       // When pinned vertical tab is at min width, we show only icon.
+       center_icon_ = true;
+@@ -694,11 +695,8 @@ bool BraveTab::ShouldRenderAsNormalTab() const {
+ 
+   if (auto* vtc = VerticalTabController::FromBrowser(
+           controller()->GetBrowserWindowInterface());
+-      vtc && vtc->ShouldShowBraveVerticalTabs() && data().pinned &&
+-      !controller_->IsVerticalTabsFloating()) {
+-    // In cased of pinned vertical tabs, we never render as normal tab, i.e.
+-    // always show only icon.
+-    return false;
++      vtc && vtc->ShouldShowBraveVerticalTabs() && data().pinned) {
++    return true;
+   }
+ 
+   return Tab::ShouldRenderAsNormalTab();
+diff --git a/browser/ui/views/tabs/brave_tab_strip.cc b/browser/ui/views/tabs/brave_tab_strip.cc
+index 23b9c5492..aee6efeb1 100644
+--- a/browser/ui/views/tabs/brave_tab_strip.cc
++++ b/browser/ui/views/tabs/brave_tab_strip.cc
+@@ -307,25 +307,7 @@ bool BraveTabStrip::IsInCollapsedTreeTabNode(
+ }
+ 
+ bool BraveTabStrip::ShouldShowPinnedTabsInGrid() const {
+-  // Basically we don't want to layout pinned tabs in grid when vertical tabs
+-  // are floating. Otherwise, pinned tabs would jump to the top of tab strip
+-  // when mouse hovers over the pinned tabs, and requires extra mouse movement
+-  // to reach the desired tab.
+-  bool should_layout_pinned_tabs_in_grid = !IsVerticalTabsFloating();
+-
+-  if (!should_layout_pinned_tabs_in_grid &&
+-      base::FeatureList::IsEnabled(tabs::kBraveVerticalTabHideCompletely)) {
+-    // Even when in floating mode, we layout pinned tabs in a grid when
+-    // "Hide Completely When Collapsed" is enabled. In this case, pinned tabs
+-    // are not visible at all, so we don't need to care about the jumping issue.
+-    should_layout_pinned_tabs_in_grid =
+-        controller_->GetBrowserWindowInterface()
+-            ->GetProfile()
+-            ->GetPrefs()
+-            ->GetBoolean(brave_tabs::kVerticalTabsHideCompletelyWhenCollapsed);
+-  }
+-
+-  return should_layout_pinned_tabs_in_grid;
++  return false;
+ }
+ 
+ void BraveTabStrip::UpdateOrientation() {
