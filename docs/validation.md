@@ -92,3 +92,18 @@ The final build was reopened with the existing Sidecar profile. The temporary
 blank tab used for the final focus check was closed afterward.
 
 Both the outer native build and nested Rust compilation default to four jobs.
+
+## October 27 — Keychain recovery
+
+After the earlier stalled request, the application log recorded macOS Keychain
+error -60008 and a subsequent development-build assertion in BookmarkCounter.
+Neither Sidecar nor SecurityAgent was running when the user reported no prompt.
+Launching the same build through macOS LaunchServices restored public-page
+navigation without needing a visible approval prompt. Example Domain loaded
+successfully; Wikipedia also loaded through the updated guarded launcher. Test
+tabs/windows were closed afterward. This identifies a working recovery, not a proven root cause of
+the original Keychain authorization failure or the later counter assertion.
+
+The development launcher now uses LaunchServices with the existing profile,
+source-version guard, and build/test receipt checks intact. Per-launch logs
+remain local and ignored. No Keychain permissions or encryption settings changed.

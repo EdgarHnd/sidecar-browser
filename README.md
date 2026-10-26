@@ -69,7 +69,10 @@ jobs (`SISO_LIMITS=local=4`); nested Rust builds also default to four jobs
 (`CARGO_BUILD_JOBS=4`). Run the wrapper with `nice -n 15` to give other apps
 priority. `python3 scripts/develop.py launch` uses a dedicated
 development profile and an isolated app identity, and requires a current online source
-check. It launches only the development app, never the regular Brave app.
+check. It launches the development app through macOS LaunchServices so system
+authorization UI uses the normal foreground app context. Separate per-launch
+stdout/stderr logs are saved under `work/app-logs/`. The regular Brave app is
+unchanged.
 
 ## Arc-inspired direction
 

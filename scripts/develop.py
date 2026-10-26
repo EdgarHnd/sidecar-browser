@@ -129,13 +129,19 @@ def execute(command, checkout, lock):
         if check(lock)["source_status"] != "current":
             raise ValueError("Brave stable has changed; update the development build first")
         executable = app_info(checkout)
-        # Keep the browser alive when the invoking terminal/session exits.
-        with (WORK / "sidecar-app.log").open("a") as log:
-            subprocess.Popen(
-                [str(executable), "--user-data-dir=" + str(WORK / "sidecar-profile"),
-                 "--no-first-run", "--no-default-browser-check", "chrome://newtab/"],
-                stdout=log, stderr=log, start_new_session=True)
-        print("Launched Sidecar with its isolated development profile.")
+        # LaunchServices gives macOS the normal foreground app context for
+        # authorization UI and keeps the browser independent of this terminal.
+        log_dir = WORK / "app-logs"
+        log_dir.mkdir(exist_ok=True)
+        stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        subprocess.run(
+            ["/usr/bin/open", "-n", "-a", str(executable.parents[2]),
+             "--stdout", str(log_dir / (stamp + ".stdout.log")),
+             "--stderr", str(log_dir / (stamp + ".stderr.log")),
+             "--args", "--user-data-dir=" + str(WORK / "sidecar-profile"),
+             "--no-first-run", "--no-default-browser-check", "chrome://newtab/"],
+            check=True)
+        print("Launched Sidecar through macOS with its isolated development profile.")
 
 
 def main():
