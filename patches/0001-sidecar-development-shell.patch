@@ -1,0 +1,87 @@
+diff --git a/app/theme/brave/BRANDING.development b/app/theme/brave/BRANDING.development
+--- a/app/theme/brave/BRANDING.development
++++ b/app/theme/brave/BRANDING.development
+@@ -1,10 +1,10 @@
+-COMPANY_FULLNAME=Brave Software, Inc.
+-COMPANY_SHORTNAME=Brave Software
+-PRODUCT_FULLNAME=Brave Browser Development
+-PRODUCT_SHORTNAME=Brave Development
++COMPANY_FULLNAME=Sidecar Local Project
++COMPANY_SHORTNAME=Sidecar
++PRODUCT_FULLNAME=Sidecar Development
++PRODUCT_SHORTNAME=Sidecar Development
+ PRODUCT_INSTALLER_FULLNAME=Brave Installer
+ PRODUCT_INSTALLER_SHORTNAME=Brave Installer
+ COPYRIGHT=Copyright 2016 The Brave Authors. All rights reserved.
+-MAC_BUNDLE_ID=com.brave.Browser.development
++MAC_BUNDLE_ID=local.sidecar.browser.development
+ MAC_CREATOR_CODE=Cr24
+-MAC_TEAM_ID=KL8N8XSYF4
++MAC_TEAM_ID=
+diff --git a/browser/ui/tabs/brave_tab_prefs.cc b/browser/ui/tabs/brave_tab_prefs.cc
+--- a/browser/ui/tabs/brave_tab_prefs.cc
++++ b/browser/ui/tabs/brave_tab_prefs.cc
+@@ -19,7 +19,7 @@
+ 
+ void RegisterBraveProfilePrefs(PrefRegistrySimple* registry) {
+   registry->RegisterIntegerPref(kTabHoverMode, TabHoverMode::CARD);
+-  registry->RegisterBooleanPref(kVerticalTabsEnabled, false);
++  registry->RegisterBooleanPref(kVerticalTabsEnabled, true);
+   registry->RegisterBooleanPref(kVerticalTabsCollapsed, false);
+   registry->RegisterBooleanPref(kVerticalTabsExpandedStatePerWindow, false);
+ #if BUILDFLAG(IS_WIN)
+@@ -37,7 +37,7 @@
+ 
+   registry->RegisterBooleanPref(kVerticalTabsFloatingEnabled, true);
+   registry->RegisterBooleanPref(kVerticalTabsShowToggleButton, true);
+-  registry->RegisterIntegerPref(kVerticalTabsExpandedWidth, 220);
++  registry->RegisterIntegerPref(kVerticalTabsExpandedWidth, 260);
+   registry->RegisterBooleanPref(kVerticalTabsOnRight, false);
+   registry->RegisterBooleanPref(kVerticalTabsShowScrollbar, false);
+   registry->RegisterBooleanPref(kShowHorizontalTabScrollButtons, false);
+diff --git a/browser/ui/views/tabs/brave_tab_strip_layout_helper.h b/browser/ui/views/tabs/brave_tab_strip_layout_helper.h
+--- a/browser/ui/views/tabs/brave_tab_strip_layout_helper.h
++++ b/browser/ui/views/tabs/brave_tab_strip_layout_helper.h
+@@ -30,9 +30,9 @@
+ 
+ namespace tabs {
+ 
+-inline constexpr int kVerticalTabHeight = 32;
++inline constexpr int kVerticalTabHeight = 36;
+ inline constexpr int kVerticalTabMinWidth = kVerticalTabHeight;
+-inline constexpr int kVerticalTabsSpacing = 4;
++inline constexpr int kVerticalTabsSpacing = 6;
+ inline constexpr int kMarginForVerticalTabContainers = kVerticalTabsSpacing;
+ inline constexpr int kPinnedUnpinnedSeparatorHeight = 1;
+ 
+diff --git a/browser/ui/tabs/test/vertical_tab_controller_unittest.cc b/browser/ui/tabs/test/vertical_tab_controller_unittest.cc
+--- a/browser/ui/tabs/test/vertical_tab_controller_unittest.cc
++++ b/browser/ui/tabs/test/vertical_tab_controller_unittest.cc
+@@ -44,9 +44,9 @@
+   EXPECT_FALSE(controller->SupportsBraveVerticalTabs());
+ }
+ 
+-TEST_F(VerticalTabControllerUnitTest, ShouldShowBraveVerticalTabsDefaultOff) {
++TEST_F(VerticalTabControllerUnitTest, ShouldShowBraveVerticalTabsDefaultOn) {
+   auto controller = MakeController();
+-  EXPECT_FALSE(controller->ShouldShowBraveVerticalTabs());
++  EXPECT_TRUE(controller->ShouldShowBraveVerticalTabs());
+ }
+ 
+ TEST_F(VerticalTabControllerUnitTest, ShouldShowBraveVerticalTabsWhenEnabled) {
+@@ -102,6 +102,7 @@
+ 
+ TEST_F(VerticalTabControllerUnitTest,
+        IsFloatingVerticalTabsDisabledWhenVerticalTabsOff) {
++  pref_service_.SetBoolean(brave_tabs::kVerticalTabsEnabled, false);
+   auto controller = MakeController();
+   EXPECT_FALSE(controller->IsFloatingVerticalTabsEnabled());
+ }
+@@ -116,6 +117,7 @@
+ 
+ TEST_F(VerticalTabControllerUnitTest,
+        ShouldShowVerticalTabToggleButtonFalseWhenVerticalTabsOff) {
++  pref_service_.SetBoolean(brave_tabs::kVerticalTabsEnabled, false);
+   auto controller = MakeController();
+   EXPECT_FALSE(controller->ShouldShowVerticalTabToggleButton());
+ }
