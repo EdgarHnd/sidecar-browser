@@ -81,7 +81,7 @@ def execute(command, checkout, lock):
             raise ValueError("Initialization requires clean tracked source")
         update_state(stage="dependency-initialization", native_build="not-run",
                      native_tests="not-run", installed=False, automatic_binary_updates=False)
-        run(checkout, "pnpm", "run", "init", "--target_arch=arm64", "--no-history")
+        run(checkout, "pnpm", "run", "init", "--target_arch=arm64", "--no-history", "--lean_sync")
         update_state(stage="dependencies-ready")
     if command in ("bootstrap", "apply"):
         validate(checkout, lock, PATCH)

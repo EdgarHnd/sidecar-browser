@@ -14,7 +14,8 @@ from Brave. This is the first development milestone, not a finished browser.
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches
   and unexpected file scope. It never resets a checkout or silently drops edits.
-- A six-hour Codex heartbeat named `Sidecar Brave security updates`.
+- A prepared native updater patch targeting signed GitHub Releases.
+  The AI schedule was deleted; updates will not depend on Codex.
 
 The source checkout and large build dependencies live in
 `../../work/brave-build/src/brave`. Node 24 and pnpm are local to
@@ -63,8 +64,9 @@ wrapper for Brave.
 
 "Always instantly current" is not a guarantee a fork can honestly make.
 Each upstream release must be fetched, integrated, built, tested, signed and
-installed. The current heartbeat watches source releases; it is **not a binary
-auto-updater**, and it depends on Codex being able to run.
+installed. Sidecar will use a **built-in native updater** with signed GitHub Releases;
+see [native updater notes](native/README.md). The standalone source tracker is
+a maintainer/build tool, not a runtime updater. No AI schedule remains.
 
 Before this can replace your daily browser, implement and prove:
 

@@ -1,0 +1,114 @@
+diff --git a/browser/mac/sidecar_update_feed.h b/browser/mac/sidecar_update_feed.h
+new file mode 100644
+--- /dev/null
++++ b/browser/mac/sidecar_update_feed.h
+@@ -0,0 +1,31 @@
++// Copyright (c) 2026 Sidecar contributors.
++// This Source Code Form is subject to the terms of the Mozilla Public
++// License, v. 2.0. If a copy of the MPL was not distributed with this file,
++// You can obtain one at https://mozilla.org/MPL/2.0/.
++
++#ifndef BRAVE_BROWSER_MAC_SIDECAR_UPDATE_FEED_H_
++#define BRAVE_BROWSER_MAC_SIDECAR_UPDATE_FEED_H_
++
++#import <Foundation/Foundation.h>
++
++namespace sidecar {
++
++inline NSString* UpdateFeedURL(NSDictionary* info) {
++  id feed = info[@"SidecarUpdateFeedURL"];
++  id public_key = info[@"SUPublicEDKey"];
++  if (![feed isKindOfClass:[NSString class]] ||
++      ![public_key isKindOfClass:[NSString class]]) {
++    return nil;
++  }
++  NSURLComponents* url = [NSURLComponents componentsWithString:feed];
++  NSData* key = [[NSData alloc] initWithBase64EncodedString:public_key options:0];
++  if (![url.scheme isEqualToString:@"https"] || !url.host.length ||
++      url.user || url.password || url.fragment || key.length != 32) {
++    return nil;
++  }
++  return feed;
++}
++
++}  // namespace sidecar
++
++#endif  // BRAVE_BROWSER_MAC_SIDECAR_UPDATE_FEED_H_
+diff --git a/browser/mac/sparkle_glue.mm b/browser/mac/sparkle_glue.mm
+--- a/browser/mac/sparkle_glue.mm
++++ b/browser/mac/sparkle_glue.mm
+@@ -4,6 +4,8 @@
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+ #import "brave/browser/mac/sparkle_glue.h"
++
++#import "brave/browser/mac/sidecar_update_feed.h"
+ 
+ #include <sys/mount.h>
+ #include <sys/stat.h>
+@@ -459,6 +461,11 @@
+ }
+ 
+ - (NSString*)feedURLStringForUpdater:(id)__unused updater {
++  NSBundle* bundle = base::apple::OuterBundle();
++  if ([bundle.bundleIdentifier hasPrefix:@"local.sidecar.browser"]) {
++    return sidecar::UpdateFeedURL(bundle.infoDictionary);
++  }
++
+   auto* command = base::CommandLine::ForCurrentProcess();
+   if (command->HasSwitch(switches::kUpdateFeedURL)) {
+     return base::SysUTF8ToNSString(
+diff --git a/browser/sources.gni b/browser/sources.gni
+--- a/browser/sources.gni
++++ b/browser/sources.gni
+@@ -564,6 +564,7 @@
+ 
+ if (enable_sparkle) {
+   brave_chrome_browser_sources += [
++    "//brave/browser/mac/sidecar_update_feed.h",
+     "//brave/browser/mac/sparkle_glue.h",
+     "//brave/browser/mac/sparkle_glue.mm",
+     "//brave/browser/mac/su_updater.h",
+diff --git a/build/config.gni b/build/config.gni
+--- a/build/config.gni
++++ b/build/config.gni
+@@ -12,6 +12,7 @@
+ 
+ declare_args() {
+   base_sparkle_update_url = ""
++  sidecar_update_feed_url = ""
+   enable_sparkle = !is_component_build && is_mac
+   build_sparkle = false
+ 
+diff --git a/BUILD.gn b/BUILD.gn
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -777,6 +777,7 @@
+       "--brave_product_dir_name=" + brave_product_dir_name,
+       "--brave_version=" + brave_version,
+       "--brave_eddsa_key=" + sparkle_eddsa_public_key,
++      "--sidecar_update_feed_url=" + sidecar_update_feed_url,
+     ]
+ 
+     if (skip_signing) {
+diff --git a/build/mac/tweak_info_plist.py b/build/mac/tweak_info_plist.py
+--- a/build/mac/tweak_info_plist.py
++++ b/build/mac/tweak_info_plist.py
+@@ -77,6 +77,7 @@
+                         action='store',
+                         default=None,
+                         help='Public EdDSA key for update')
++    parser.add_argument('--sidecar_update_feed_url', default='')
+     parser.add_argument('--brave_version', dest='brave_version', action='store',
+         default=None, help='brave version string')
+     parser.add_argument('--format', choices=('binary1', 'xml1', 'json'),
+@@ -125,6 +126,9 @@
+     if args.brave_eddsa_key:
+         plist['SUPublicEDKey'] = args.brave_eddsa_key
+ 
++    if args.sidecar_update_feed_url:
++        plist['SidecarUpdateFeedURL'] = args.sidecar_update_feed_url
++
+     _OverrideVersionKey(plist, args.brave_version)
+ 
+     # Explicitly disable profiling

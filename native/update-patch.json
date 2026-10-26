@@ -1,0 +1,16 @@
+{
+  "status": "prepared-not-integrated",
+  "base_commit": "52db4b25c0aa3038e9a1c6021428b136cc3cb5fc",
+  "sha256": "0c57a10a5b83cc75c38c40cff2583da7b1cd1820b73eae32333fbeffe406541e",
+  "files": [
+    "browser/mac/sidecar_update_feed.h",
+    "browser/mac/sparkle_glue.mm",
+    "browser/sources.gni",
+    "build/config.gni",
+    "BUILD.gn",
+    "build/mac/tweak_info_plist.py"
+  ],
+  "hosting": "GitHub Releases",
+  "feed_configured": false,
+  "signing_configured": false
+}
