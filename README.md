@@ -3,6 +3,10 @@
 Sidecar is a temporary working name for an Arc-inspired personal browser built
 from Brave. This is the first development milestone, not a finished browser.
 
+Public source: [EdgarHnd/sidecar-browser](https://github.com/EdgarHnd/sidecar-browser).
+GitHub Actions verifies the update/build safeguards and native feed validator.
+Those checks do not compile the full browser or certify a distributable release.
+
 ## What exists
 
 - Brave stable **1.98.60**, Chromium **156.0.8078.48**, pinned to the exact

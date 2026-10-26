@@ -147,7 +147,7 @@ def main():
             raise SystemExit("A Sidecar operation is already running")
         try:
             current = json.loads(STATE.read_text()) if STATE.exists() else {}
-            for field in ("error", "failed_during", "command"):
+            for field in ("error", "failed_during", "command", "pause_reason", "resume_command"):
                 current.pop(field, None)
             STATE.write_text(json.dumps(current, indent=2) + "\n")
             execute(args.command, args.checkout.resolve(), lock)
