@@ -193,3 +193,36 @@ Direct Dock inspection through macOS automation timed out, so a live Dock
 pixel check is not recorded. The app bundle resources and icon identifiers
 (CFBundleIconFile and CFBundleIconName) were verified. In-browser Brave brand
 marks are outside this app-icon change.
+
+
+## October 27 — normal-launch profile and icon corrections
+
+A normal Dock/Finder launch passed no --user-data-dir argument and opened
+BraveSoftware/Brave-Browser-Development, an empty profile, while the development
+launcher used work/sidecar-profile. The Sidecar bundle now declares
+Sidecar/Development as CrProductDirName and the launcher uses that same path
+under Application Support. On this Mac it is a symlink to the existing data
+under Dev; no existing profile was moved or replaced. A local safety copy of
+session files, preferences, and encrypted databases was saved first. The
+existing profile is configured to restore its previous session on startup.
+A regression test rejects a bundle whose default directory differs from the
+launcher's expected directory.
+
+The earlier icon's pre-rounded transparent border was framed again by macOS.
+The current source is opaque, full-bleed square artwork, leaving masking to
+the system. Both icon resources were rebuilt, and macOS's resolved 128-pixel
+application icon was inspected: it shows a single orange rounded tile without
+the extra gray backing. No Dock cache or system preferences were changed.
+
+The user explicitly authorized restoring their encrypted Google cookies from
+original Brave. After a SQLite backup, only Google-domain cookie rows were
+merged into Sidecar; the original database was opened read-only, values stayed
+encrypted, and other Sidecar rows were preserved. Google Play Console showed an
+authenticated account. After a clean quit and a normal macOS app launch without
+profile arguments, all seven Favorites and the ordinary pinned tab reappeared,
+and the authenticated Google account view was verified again after refresh.
+This verifies Google session recovery, not every website login or future
+server-side session validity.
+
+The native build and all 49 targeted native tests passed; all 26 Python
+safeguards passed. No credential values or private profile files are committed.

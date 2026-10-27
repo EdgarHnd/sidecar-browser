@@ -12,6 +12,12 @@ Brave profile. A separate `work/sidecar-ui-smoke-profile` holds public
 example pages used for UI testing. Never point either app at the other's live
 profile directory.
 
+Sidecar now defaults to `~/Library/Application Support/Sidecar/Development`
+for both normal macOS launches and the development launcher. On this Mac it
+is a symlink to the existing `work/sidecar-profile`; preserve that link and
+target. The former Brave-Browser-Development directory was an accidental empty
+profile created by Dock launches and was left untouched.
+
 Source downloads, the installed Metal toolchain, and compilation outputs are
 retained under the project-local `work/` directory. After the local move into
 `Dev/`, old paths remain as compatibility links for existing build artifacts.

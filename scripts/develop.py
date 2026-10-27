@@ -15,6 +15,8 @@ from patches import DEFAULT_CHECKOUT, ROOT, WORK, git, validate, patch_bundle
 from upstream import check
 
 STATE = ROOT / "build-state.json"
+PROFILE_DIR_NAME = "Sidecar/Development"
+PROFILE = Path.home() / "Library/Application Support" / PROFILE_DIR_NAME
 
 
 def update_state(**fields):
@@ -79,6 +81,8 @@ def app_info(checkout):
         info = plistlib.load(file)
     if info.get("CFBundleIdentifier") != "local.sidecar.browser.development":
         raise ValueError("Unexpected bundle identity; refusing to launch")
+    if info.get("CrProductDirName") != PROFILE_DIR_NAME:
+        raise ValueError("App default profile differs from the Sidecar launcher profile")
     executable = app / "Contents/MacOS" / info["CFBundleExecutable"]
     if not executable.is_file():
         raise ValueError("Built app executable missing")
@@ -138,7 +142,7 @@ def execute(command, checkout, lock):
             ["/usr/bin/open", "-n", "-a", str(executable.parents[2]),
              "--stdout", str(log_dir / (stamp + ".stdout.log")),
              "--stderr", str(log_dir / (stamp + ".stderr.log")),
-             "--args", "--user-data-dir=" + str(WORK / "sidecar-profile"),
+             "--args", "--user-data-dir=" + str(PROFILE),
              "--no-first-run", "--no-default-browser-check", "--restore-last-session"],
             check=True)
         print("Launched Sidecar through macOS with its isolated development profile.")

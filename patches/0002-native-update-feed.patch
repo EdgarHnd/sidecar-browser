@@ -80,6 +80,17 @@ diff --git a/build/config.gni b/build/config.gni
    enable_sparkle = !is_component_build && is_mac
    build_sparkle = false
  
+@@ -170,6 +171,10 @@ if (is_win) {
+   brave_product_dir_name =
+       "BraveSoftware/Brave-$_product_brand$brave_product_dir_name_suffix"
+ 
++  if (chrome_mac_bundle_id == "local.sidecar.browser.development") {
++    brave_product_dir_name = "Sidecar/Development"
++  }
++
+   if (base_sparkle_update_url == "") {
+     base_sparkle_update_url =
+         "https://updates.bravesoftware.com/sparkle/Brave-$_product_brand"
 diff --git a/BUILD.gn b/BUILD.gn
 --- a/BUILD.gn
 +++ b/BUILD.gn

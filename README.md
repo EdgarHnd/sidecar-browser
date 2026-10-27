@@ -28,7 +28,7 @@ Those checks do not compile the full browser or certify a distributable release.
 - The Tangerine Pod app icon is packaged in both macOS icon formats and kept
   in the verified development branding patch. See `assets/branding/README.md`.
 - The native development app compiled and launched; all 49 targeted native
-  tests passed on October 27, 2026, along with 25 Python safeguard tests.
+  tests passed on October 27, 2026, along with 26 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches
@@ -77,6 +77,10 @@ check. It launches the development app through macOS LaunchServices so system
 authorization UI uses the normal foreground app context. Separate per-launch
 stdout/stderr logs are saved under `work/app-logs/`. Launch resumes the previous
 session in the existing Sidecar profile without requesting a new blank tab.
+Dock/Finder launches and the launcher use `~/Library/Application Support/Sidecar/Development`.
+On this development Mac that path links to the existing `work/sidecar-profile`,
+so the data stays under Dev. The app build guard rejects a different default
+profile directory. Original Brave's profile remains separate.
 The regular Brave app is unchanged.
 
 ## Arc-inspired direction

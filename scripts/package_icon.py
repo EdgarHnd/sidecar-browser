@@ -47,7 +47,7 @@ def package(source, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path,
-                        default=ROOT / "assets/branding/sidecar-tangerine.png")
+                        default=ROOT / "assets/branding/sidecar-tangerine-full-bleed.png")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     package(args.source.resolve(strict=True), args.output.resolve())

@@ -1,4 +1,5 @@
 import json
+import plistlib
 import sys
 import tempfile
 import unittest
@@ -22,7 +23,8 @@ class DevelopmentLaunchTests(unittest.TestCase):
             "native_build": "passed",
             "native_tests": "passed",
         }))
-        for name, value in (("WORK", self.root), ("STATE", self.state)):
+        for name, value in (("WORK", self.root), ("STATE", self.state),
+                            ("PROFILE", self.root / "profile")):
             context = patch.object(develop, name, value)
             context.start()
             self.addCleanup(context.stop)
@@ -37,7 +39,7 @@ class DevelopmentLaunchTests(unittest.TestCase):
         develop.execute("launch", self.root / "checkout", self.lock)
         command = subprocess.run.call_args.args[0]
         self.assertEqual(command[:3], ["/usr/bin/open", "-n", "-a"])
-        self.assertIn("--user-data-dir=" + str(self.root / "sidecar-profile"), command)
+        self.assertIn("--user-data-dir=" + str(self.root / "profile"), command)
         self.assertIn("--restore-last-session", command)
         self.assertFalse(any(arg.startswith(("chrome://", "brave://", "http://", "https://"))
                              for arg in command))
@@ -49,3 +51,19 @@ class DevelopmentLaunchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Brave stable has changed"):
             develop.execute("launch", self.root / "checkout", self.lock)
         subprocess.run.assert_not_called()
+
+    def test_app_guard_rejects_a_different_dock_profile(self):
+        checkout = self.root / "src/brave"
+        app = self.root / "src/out/Sidecar/Sidecar Development.app"
+        contents = app / "Contents"
+        (contents / "MacOS").mkdir(parents=True)
+        (contents / "MacOS/Sidecar").write_bytes(b"fixture")
+        info = {"CFBundleIdentifier": "local.sidecar.browser.development",
+                "CFBundleExecutable": "Sidecar",
+                "CrProductDirName": "BraveSoftware/Brave-Browser-Development"}
+        (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+        with self.assertRaisesRegex(ValueError, "default profile differs"):
+            develop.app_info(checkout)
+        info["CrProductDirName"] = develop.PROFILE_DIR_NAME
+        (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+        self.assertEqual(develop.app_info(checkout), contents / "MacOS/Sidecar")

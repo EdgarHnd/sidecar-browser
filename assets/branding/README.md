@@ -3,11 +3,14 @@
 The selected Pod mark uses an ivory sidecar silhouette, a single solid wheel,
 and a tangerine-to-coral rounded-square background with a soft enamel highlight.
 Edgar selected Tangerine from the six color and finish options on October 27, 2026.
-The source PNG retains its transparent outer margin.
+The current source, sidecar-tangerine-full-bleed.png, is opaque and fills the
+square canvas; macOS supplies its corner mask. The earlier transparent,
+pre-rounded source is retained only as a design reference. It was displayed
+inside an extra system frame on the user's Mac and is not packaged anymore.
 
 The icon was generated with OpenAI image generation, using the selected concept
-as the reference. The final edit requested only transparent-edge cleanup while
-preserving the pod geometry, angle, color, spacing, and lighting.
+as the reference. The latest edit removed the pre-rounded outer tile and transparent padding
+while preserving the ivory pod and orange gradient.
 
 Package the source on a Mac with Xcode installed:
 
