@@ -226,3 +226,19 @@ server-side session validity.
 
 The native build and all 49 targeted native tests passed; all 26 Python
 safeguards passed. No credential values or private profile files are committed.
+
+
+The user subsequently authorized the remaining website sessions. With Sidecar
+closed and another SQLite backup saved, non-Google cookie rows from original
+Brave were merged without decrypting their values. The already recovered Google
+session and Sidecar-only rows were retained. GitHub and Mixpanel cookie records
+are present after relaunch. A user-operated Google passkey dialog briefly
+interrupted live checks; no interaction with that dialog was automated. After
+the user finished it, Mixpanel opened its authenticated project dashboard and
+GitHub displayed its authenticated user menu and the repository in the original
+Favorite. GitHub initially displayed a blank loading view, then rendered after
+the regular-tab check and switching back. The temporary test tab was closed;
+all seven Favorites and the existing ordinary pinned tab remained. Google,
+GitHub, and Mixpanel authentication are verified; other services were not
+individually checked and can require fresh authentication. The code repair's
+GitHub verification run passed both jobs.
