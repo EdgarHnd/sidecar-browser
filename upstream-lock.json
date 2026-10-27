@@ -7,7 +7,7 @@
   "brave_core_commit": "52db4b25c0aa3038e9a1c6021428b136cc3cb5fc",
   "chromium_version": "156.0.8078.48",
   "release_url": "https://github.com/brave/brave-browser/releases/tag/v1.98.60",
-  "patch_sha256": "9cd6dfdb33e3838793c915622c01d2435e0a50bf727e12126b5b0f13113daa7b",
+  "patch_sha256": "7c43f595a353fcc66538aba6a409ff30fc8ed826eb6d38e92d3051f2ae1f6bf1",
   "patch_files": [
     "BUILD.gn",
     "app/theme/brave/BRANDING.development",
@@ -54,7 +54,7 @@
     },
     {
       "file": "patches/0003-sidecar-browser-controls.patch",
-      "sha256": "14d6286a9b93cbd5016afb9fe8a6d029ed07af767145ebc30926dd8b2bf46fd3"
+      "sha256": "91e9b8030c71de568e8dba7ae58963340b4cebd30fed32a014373759acf2a9fb"
     },
     {
       "file": "patches/0004-sidecar-tangerine-icon.patch",

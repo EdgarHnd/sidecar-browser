@@ -139,10 +139,10 @@ index f77b1070c..954434fea 100644
               : BrowserCommandController::
 diff --git a/browser/ui/sidecar_browser_controls.cc b/browser/ui/sidecar_browser_controls.cc
 new file mode 100644
-index 000000000..2beb67502
+index 000000000..964a18296
 --- /dev/null
 +++ b/browser/ui/sidecar_browser_controls.cc
-@@ -0,0 +1,542 @@
+@@ -0,0 +1,583 @@
 +// Copyright 2026 The Sidecar Authors. MPL-2.0.
 +#include "brave/browser/ui/sidecar_browser_controls.h"
 +
@@ -187,6 +187,8 @@ index 000000000..2beb67502
 +#include "ui/events/event.h"
 +#include "ui/events/keycodes/keyboard_codes.h"
 +#include "ui/gfx/geometry/insets.h"
++#include "ui/gfx/animation/linear_animation.h"
++#include "ui/gfx/animation/tween.h"
 +#include "ui/gfx/text_elider.h"
 +#include "ui/views/background.h"
 +#include "ui/views/border.h"
@@ -200,6 +202,7 @@ index 000000000..2beb67502
 +#include "ui/views/widget/widget.h"
 +#include "ui/views/widget/widget_observer.h"
 +#include "ui/views/window/dialog_delegate.h"
++#include "ui/views/window/non_client_view.h"
 +
 +namespace sidecar {
 +namespace {
@@ -284,7 +287,8 @@ index 000000000..2beb67502
 +
 +class CommandBar : public views::View,
 +                   public views::TextfieldController,
-+                   public views::WidgetObserver {
++                   public views::WidgetObserver,
++                   public gfx::AnimationDelegate {
 +  METADATA_HEADER(CommandBar, views::View)
 + public:
 +  explicit CommandBar(BrowserWindowInterface* browser)
@@ -496,7 +500,7 @@ index 000000000..2beb67502
 +        ui::ImageModel::FromVectorIcon(vector_icons::kSearchIcon,
 +                                       ui::kColorSecondaryForeground, 20));
 +    UpdateSelection();
-+    SetPreferredSize(gfx::Size(640, 112 + 56 * buttons_.size()));
++    PreferredSizeChanged();
 +    if (GetWidget()) {
 +      PositionWidget();
 +    }
@@ -531,11 +535,44 @@ index 000000000..2beb67502
 +    }
 +    const auto bounds = browser_->GetWindow()->GetBounds();
 +    const int width = std::clamp(bounds.width() - 64, 280, 640);
-+    const int height = GetPreferredSize().height();
++    if (width != width_) {
++      width_ = width;
++      PreferredSizeChanged();
++    }
++    const int height = GetWidget()
++                           ->non_client_view()
++                           ->GetWindowBoundsForClientBounds(
++                               gfx::Rect(GetPreferredSize()))
++                           .height();
 +    GetWidget()->SetBounds(
 +        gfx::Rect(bounds.CenterPoint().x() - width / 2,
 +                  bounds.y() + std::max(48, (bounds.height() - height) / 3),
 +                  width, height));
++  }
++
++  // Fixed width; the height follows the rows so the last one is never cut.
++  gfx::Size CalculatePreferredSize(
++      const views::SizeBounds& available_size) const override {
++    return gfx::Size(
++        width_, GetLayoutManager()->GetPreferredHeightForWidth(this, width_));
++  }
++
++  void FadeIn() {
++    GetWidget()->SetOpacity(0.f);
++    fade_in_.Start();
++  }
++
++  // gfx::AnimationDelegate:
++  void AnimationProgressed(const gfx::Animation* animation) override {
++    if (GetWidget()) {
++      GetWidget()->SetOpacity(static_cast<float>(gfx::Tween::CalculateValue(
++          gfx::Tween::EASE_OUT, animation->GetCurrentValue())));
++    }
++  }
++  void AnimationEnded(const gfx::Animation*) override {
++    if (GetWidget()) {
++      GetWidget()->SetOpacity(1.f);
++    }
 +  }
 +
 + private:
@@ -601,6 +638,9 @@ index 000000000..2beb67502
 +  std::vector<std::string> favorite_targets_;
 +  std::vector<base::WeakPtr<content::WebContents>> targets_;
 +  int selected_ = 0;
++  int width_ = 640;
++  gfx::LinearAnimation fade_in_{base::Milliseconds(120),
++                                gfx::LinearAnimation::kDefaultFrameRate, this};
 +};
 +BEGIN_METADATA(CommandBar)
 +END_METADATA
@@ -645,6 +685,7 @@ index 000000000..2beb67502
 +          ->GetNativeView());
 +  (*bars)[browser] = widget->GetWeakPtr();
 +  bar->PositionWidget();
++  bar->FadeIn();
 +  widget->Show();
 +}
 +
@@ -706,15 +747,17 @@ index 000000000..58e6c6b73
 +#endif
 diff --git a/browser/ui/sidecar_browser_controls_unittest.cc b/browser/ui/sidecar_browser_controls_unittest.cc
 new file mode 100644
-index 000000000..8bdbab7dd
+index 000000000..fad5eb08a
 --- /dev/null
 +++ b/browser/ui/sidecar_browser_controls_unittest.cc
-@@ -0,0 +1,308 @@
+@@ -0,0 +1,342 @@
 +// Copyright 2026 The Sidecar Authors. MPL-2.0.
 +#include "brave/browser/ui/sidecar_browser_controls.h"
 +
++#include <string>
++#include <vector>
++
 +#include "base/functional/bind.h"
-+#include "base/pickle.h"
 +#include "base/run_loop.h"
 +#include "base/test/bind.h"
 +#include "base/test/run_until.h"
@@ -734,15 +777,13 @@ index 000000000..8bdbab7dd
 +#include "content/public/browser/web_contents.h"
 +#include "content/public/common/content_client.h"
 +#include "testing/gtest/include/gtest/gtest.h"
-+#include "ui/base/clipboard/clipboard_format_type.h"
-+#include "ui/base/dragdrop/drag_drop_types.h"
-+#include "ui/base/dragdrop/drop_target_event.h"
-+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
-+#include "ui/base/dragdrop/os_exchange_data.h"
-+#include "ui/compositor/layer_tree_owner.h"
++#include "ui/events/base_event_utils.h"
++#include "ui/events/event.h"
++#include "ui/events/keycodes/keyboard_codes.h"
++#include "ui/views/controls/scroll_view.h"
 +#include "ui/views/view.h"
++#include "ui/views/widget/widget.h"
 +#include "url/gurl.h"
-+#include "url/origin.h"
 +
 +class SidecarPinnedTabTest : public BrowserWithTestWindowTest {
 + public:
@@ -978,45 +1019,79 @@ index 000000000..8bdbab7dd
 +  EXPECT_TRUE(favorites.entries().empty());
 +}
 +
-+TEST_F(SidecarPinnedTabTest, FavoriteDropReordersAndRejectsForeignData) {
-+  auto view = sidecar::CreateFavoritesView(browser(), base::RepeatingClosure());
++TEST_F(SidecarPinnedTabTest, FavoriteDragReordersAndNeverDoublesAsClick) {
++  // Buttons hit-test their presses, which needs a hosting widget.
++  auto widget = std::make_unique<views::Widget>();
++  views::Widget::InitParams params(
++      views::Widget::InitParams::CLIENT_OWNS_WIDGET,
++      views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
++  params.bounds = gfx::Rect(0, 0, 260, 200);
++  widget->Init(std::move(params));
++  auto* view = widget->SetContentsView(
++      sidecar::CreateFavoritesView(browser(), base::RepeatingClosure()));
 +  auto* favorites = sidecar::FavoritesController::ForBrowser(browser());
 +  ASSERT_TRUE(favorites);
-+  AddTab(browser(), GURL("https://example.test/first"));
-+  ASSERT_TRUE(favorites->AddActive());
-+  AddTab(browser(), GURL("https://example.test/second"));
-+  ASSERT_TRUE(favorites->AddActive());
-+  const auto second = favorites->entries()[1].id;
++  for (const char* path : {"first", "second", "third"}) {
++    AddTab(browser(), GURL(std::string("https://example.test/") + path));
++    ASSERT_TRUE(favorites->AddActive());
++  }
 +  base::RunLoop().RunUntilIdle();
 +  view->SetBounds(0, 0, 260, 100);
 +  view->DeprecatedLayoutImmediately();
++  // Children: the "Favorites" label, the add button, then the scrolling grid.
++  views::View* grid =
++      static_cast<views::ScrollView*>(view->children()[2].get())->contents();
++  ASSERT_EQ(3u, grid->children().size());
++  auto saved_ids = [&] {
++    std::vector<std::string> ids;
++    for (const auto& entry : favorites->entries()) {
++      ids.push_back(entry.id);
++    }
++    return ids;
++  };
++  const auto original = saved_ids();
++  auto* model = browser()->GetTabStripModel();
++  auto* active = model->GetActiveTab();
++  auto mouse = [](ui::EventType type, const gfx::Point& point) {
++    return ui::MouseEvent(type, point, point, ui::EventTimeForNow(),
++                          ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON);
++  };
 +
-+  const auto format =
-+      ui::ClipboardFormatType::CustomPlatformType("org.sidecar.favorite");
-+  base::Pickle pickle;
-+  pickle.WriteString(second);
-+  ui::OSExchangeData data;
-+  data.SetPickledData(format, pickle);
-+  EXPECT_TRUE(view->CanDrop(data));
-+  const ui::DropTargetEvent event(data, gfx::PointF(20, 40),
-+                                  gfx::PointF(20, 40),
-+                                  ui::DragDropTypes::DRAG_MOVE);
-+  EXPECT_EQ(ui::DragDropTypes::DRAG_MOVE, view->OnDragUpdated(event));
-+  auto callback = view->GetDropCallback(event);
-+  auto operation = ui::mojom::DragOperation::kNone;
-+  std::move(callback).Run(event, operation, nullptr);
-+  EXPECT_EQ(ui::mojom::DragOperation::kMove, operation);
-+  EXPECT_EQ(second, favorites->entries()[0].id);
++  // Dragging the first tile onto the third slot saves the new order and does
++  // not open the dragged Favorite.
++  views::View* first = grid->children()[0];
++  views::View* second = grid->children()[1];
++  const gfx::Point grab = first->GetLocalBounds().CenterPoint();
++  gfx::Point drop = grid->children()[2]->bounds().CenterPoint();
++  views::View::ConvertPointToTarget(grid, first, &drop);
++  first->OnMousePressed(mouse(ui::EventType::kMousePressed, grab));
++  first->OnMouseDragged(mouse(ui::EventType::kMouseDragged, drop));
++  first->OnMouseReleased(mouse(ui::EventType::kMouseReleased, drop));
++  base::RunLoop().RunUntilIdle();
++  EXPECT_EQ((std::vector<std::string>{original[1], original[2], original[0]}),
++            saved_ids());
++  EXPECT_EQ(active, model->GetActiveTab());
 +
-+  ui::OSExchangeData unrelated;
-+  EXPECT_FALSE(view->CanDrop(unrelated));
-+  base::Pickle unknown;
-+  unknown.WriteString("not-a-saved-favorite");
-+  unrelated.SetPickledData(format, unknown);
-+  EXPECT_FALSE(view->CanDrop(unrelated));
-+  data.MarkRendererTaintedFromOrigin(
-+      url::Origin::Create(GURL("https://example.test")));
-+  EXPECT_FALSE(view->CanDrop(data));
++  // Escape cancels a drag; the release that follows is not a click.
++  const auto reordered = saved_ids();
++  const gfx::Point start = second->GetLocalBounds().CenterPoint();
++  const gfx::Point away = start + gfx::Vector2d(120, 0);
++  second->OnMousePressed(mouse(ui::EventType::kMousePressed, start));
++  second->OnMouseDragged(mouse(ui::EventType::kMouseDragged, away));
++  second->OnKeyPressed(
++      ui::KeyEvent(ui::EventType::kKeyPressed, ui::VKEY_ESCAPE, ui::EF_NONE));
++  second->OnMouseDragged(
++      mouse(ui::EventType::kMouseDragged, away + gfx::Vector2d(10, 0)));
++  second->OnMouseReleased(mouse(ui::EventType::kMouseReleased, away));
++  base::RunLoop().RunUntilIdle();
++  EXPECT_EQ(reordered, saved_ids());
++  EXPECT_EQ(active, model->GetActiveTab());
++
++  // A press and release without movement still opens the Favorite.
++  second->OnMousePressed(mouse(ui::EventType::kMousePressed, start));
++  second->OnMouseReleased(mouse(ui::EventType::kMouseReleased, start));
++  EXPECT_EQ(favorites->FindTab(original[1]), model->GetActiveTab());
++  widget.reset();
 +}
 diff --git a/browser/ui/sidecar_favorites.cc b/browser/ui/sidecar_favorites.cc
 new file mode 100644
@@ -1581,21 +1656,25 @@ index 7de8ab7e5..741387dac 100644
  }
 diff --git a/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.cc b/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.cc
 new file mode 100644
-index 000000000..7dd115cc2
+index 000000000..24cce8402
 --- /dev/null
 +++ b/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.cc
-@@ -0,0 +1,386 @@
+@@ -0,0 +1,625 @@
 +// Copyright 2026 The Sidecar Authors. MPL-2.0.
 +#include "brave/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h"
 +
 +#include <algorithm>
 +#include <map>
++#include <memory>
++#include <optional>
++#include <set>
++#include <string>
++#include <vector>
 +
 +#include "base/functional/bind.h"
-+#include "base/no_destructor.h"
-+#include "base/pickle.h"
 +#include "base/strings/utf_string_conversions.h"
 +#include "base/task/cancelable_task_tracker.h"
++#include "base/time/time.h"
 +#include "brave/browser/ui/sidecar_favorites.h"
 +#include "chrome/browser/favicon/favicon_service_factory.h"
 +#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -1604,16 +1683,21 @@ index 000000000..7dd115cc2
 +#include "components/favicon/core/favicon_service.h"
 +#include "components/vector_icons/vector_icons.h"
 +#include "content/public/browser/web_contents.h"
-+#include "ui/base/clipboard/clipboard_format_type.h"
-+#include "ui/base/dragdrop/drag_drop_types.h"
-+#include "ui/base/dragdrop/drop_target_event.h"
-+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
-+#include "ui/base/dragdrop/os_exchange_data.h"
 +#include "ui/base/metadata/metadata_impl_macros.h"
 +#include "ui/base/models/image_model.h"
 +#include "ui/color/color_id.h"
-+#include "ui/compositor/layer_tree_owner.h"
++#include "ui/color/color_provider.h"
++#include "ui/compositor/layer.h"
++#include "ui/compositor/layer_animator.h"
++#include "ui/events/event.h"
++#include "ui/events/keycodes/keyboard_codes.h"
++#include "ui/gfx/animation/throb_animation.h"
++#include "ui/gfx/animation/tween.h"
++#include "ui/gfx/geometry/transform_util.h"
 +#include "ui/menus/simple_menu_model.h"
++#include "ui/views/animation/animation_builder.h"
++#include "ui/views/animation/bounds_animator.h"
++#include "ui/views/animation/bounds_animator_observer.h"
 +#include "ui/views/background.h"
 +#include "ui/views/border.h"
 +#include "ui/views/context_menu_controller.h"
@@ -1622,54 +1706,194 @@ index 000000000..7dd115cc2
 +#include "ui/views/controls/label.h"
 +#include "ui/views/controls/menu/menu_runner.h"
 +#include "ui/views/controls/scroll_view.h"
-+#include "ui/views/drag_controller.h"
 +#include "ui/views/view.h"
 +#include "ui/views/view_utils.h"
 +
 +namespace sidecar {
 +namespace {
-+const ui::ClipboardFormatType& FavoriteFormat() {
-+  static const base::NoDestructor<ui::ClipboardFormatType> type(
-+      ui::ClipboardFormatType::CustomPlatformType("org.sidecar.favorite"));
-+  return *type;
++constexpr int kTileHeight = 48;
++constexpr int kRowHeight = 54;
++constexpr int kTileGap = 6;
++constexpr int kCornerRadius = 10;
++constexpr float kPressedScale = 0.94f;
++constexpr float kLiftedScale = 1.06f;
++constexpr base::TimeDelta kHoverFade = base::Milliseconds(120);
++constexpr base::TimeDelta kPressDuration = base::Milliseconds(90);
++constexpr base::TimeDelta kLiftDuration = base::Milliseconds(120);
++constexpr base::TimeDelta kSlideDuration = base::Milliseconds(180);
++
++template <typename T>
++void MoveItem(std::vector<T>& items, size_t from, size_t to) {
++  auto item = std::move(items[from]);
++  items.erase(items.begin() + from);
++  items.insert(items.begin() + to, std::move(item));
 +}
++
++class FavoriteButton;
++
++class FavoriteDragDelegate {
++ public:
++  virtual void DragStarted(FavoriteButton* button, const gfx::Point& press) = 0;
++  virtual void DragMoved(FavoriteButton* button, const gfx::Point& point) = 0;
++  virtual void DragEnded(FavoriteButton* button, bool canceled) = 0;
++
++ protected:
++  virtual ~FavoriteDragDelegate() = default;
++};
++
++// A tile that fades its hover state, shrinks while pressed, and reports
++// pointer drags to the grid instead of starting a platform drag session.
 +class FavoriteButton : public views::ImageButton {
 +  METADATA_HEADER(FavoriteButton, views::ImageButton)
 + public:
-+  explicit FavoriteButton(PressedCallback callback)
-+      : views::ImageButton(std::move(callback)) {
++  FavoriteButton(PressedCallback callback, FavoriteDragDelegate* drag)
++      : views::ImageButton(std::move(callback)), drag_(drag) {
 +    SetImageHorizontalAlignment(ALIGN_CENTER);
 +    SetImageVerticalAlignment(ALIGN_MIDDLE);
 +    SetFocusBehavior(FocusBehavior::ALWAYS);
-+    UpdateColor();
++    SetPaintToLayer();
++    layer()->SetFillsBoundsOpaquely(false);
++    SetAnimateOnStateChange(true);
++    SetAnimationDuration(kHoverFade);
++    UpdateBorder();
++    UpdateBackground();
 +  }
++
 +  void SetActive(bool active) {
++    if (active_ == active) {
++      return;
++    }
 +    active_ = active;
-+    UpdateColor();
++    UpdateBorder();
++    UpdateBackground();
 +  }
-+  void SetDropTarget(bool target) {
-+    drop_target_ = target;
-+    UpdateColor();
++
++  void AnimateScale(float scale, base::TimeDelta duration) {
++    gfx::Transform transform;
++    transform.Scale(scale, scale);
++    views::AnimationBuilder()
++        .SetPreemptionStrategy(ui::LayerAnimator::PreemptionStrategy::
++                                   IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
++        .Once()
++        .SetDuration(duration)
++        .SetTransform(this,
++                      gfx::TransformAboutPivot(
++                          gfx::RectF(GetLocalBounds()).CenterPoint(),
++                          transform),
++                      gfx::Tween::EASE_OUT);
 +  }
++
++  void FadeIn() {
++    layer()->SetOpacity(0.f);
++    views::AnimationBuilder()
++        .Once()
++        .SetDuration(kSlideDuration)
++        .SetOpacity(this, 1.f, gfx::Tween::EASE_OUT);
++  }
++
++  // Stops a drag the grid can no longer complete, without reporting it.
++  void AbandonDrag() { dragging_ = false; }
++
++  // views::Button:
 +  void StateChanged(ButtonState previous) override {
 +    views::ImageButton::StateChanged(previous);
-+    UpdateColor();
++    UpdateBackground();
++    if (!dragging_ &&
++        (GetState() == STATE_PRESSED || previous == STATE_PRESSED)) {
++      AnimateScale(GetState() == STATE_PRESSED ? kPressedScale : 1.f,
++                   kPressDuration);
++    }
++  }
++  bool OnMousePressed(const ui::MouseEvent& event) override {
++    press_point_ = event.location();
++    dragged_since_press_ = false;
++    return views::ImageButton::OnMousePressed(event);
++  }
++  bool OnMouseDragged(const ui::MouseEvent& event) override {
++    if (!dragging_ && !dragged_since_press_ && event.IsOnlyLeftMouseButton() &&
++        ExceededDragThreshold(event.location() - press_point_)) {
++      dragging_ = true;
++      dragged_since_press_ = true;
++      SetState(STATE_NORMAL);
++      RequestFocus();
++      drag_->DragStarted(this, press_point_);
++    }
++    if (dragging_) {
++      drag_->DragMoved(this, event.location());
++      return true;
++    }
++    return dragged_since_press_ || views::ImageButton::OnMouseDragged(event);
++  }
++  void OnMouseReleased(const ui::MouseEvent& event) override {
++    if (dragging_) {
++      EndDrag(/*canceled=*/false);
++    }
++    if (dragged_since_press_) {
++      // A drag, even a canceled one, never doubles as a click.
++      SetState(STATE_NORMAL);
++      return;
++    }
++    views::ImageButton::OnMouseReleased(event);
++  }
++  void OnMouseCaptureLost() override {
++    if (dragging_) {
++      EndDrag(/*canceled=*/true);
++    }
++    views::ImageButton::OnMouseCaptureLost();
++  }
++  bool OnKeyPressed(const ui::KeyEvent& event) override {
++    if (dragging_ && event.key_code() == ui::VKEY_ESCAPE) {
++      EndDrag(/*canceled=*/true);
++      return true;
++    }
++    return views::ImageButton::OnKeyPressed(event);
++  }
++  void OnThemeChanged() override {
++    views::ImageButton::OnThemeChanged();
++    UpdateBackground();
++  }
++
++  // gfx::AnimationDelegate (drives the hover fade):
++  void AnimationProgressed(const gfx::Animation* animation) override {
++    views::ImageButton::AnimationProgressed(animation);
++    UpdateBackground();
 +  }
 +
 + private:
-+  void UpdateColor() {
-+    SetBackground(views::CreateRoundedRectBackground(
-+        active_ || drop_target_       ? ui::kColorSysPrimaryContainer
-+        : GetState() == STATE_HOVERED ? ui::kColorSysStateHoverOnSubtle
-+                                      : ui::kColorSubtleEmphasisBackground,
-+        10));
-+    SetBorder(views::CreateRoundedRectBorder(
-+        1, 10,
-+        active_ || drop_target_ ? ui::kColorSysPrimary
-+                                : ui::kColorSysStateHoverOnSubtle));
++  void EndDrag(bool canceled) {
++    dragging_ = false;
++    drag_->DragEnded(this, canceled);
 +  }
++  void UpdateBorder() {
++    SetBorder(views::CreateRoundedRectBorder(
++        1, kCornerRadius,
++        active_ ? ui::kColorSysPrimary : ui::kColorSysStateHoverOnSubtle));
++  }
++  void UpdateBackground() {
++    const ui::ColorProvider* colors = GetColorProvider();
++    if (active_ || !colors) {
++      SetBackground(views::CreateRoundedRectBackground(
++          active_ ? ui::kColorSysPrimaryContainer
++                  : ui::kColorSubtleEmphasisBackground,
++          kCornerRadius));
++      return;
++    }
++    // Button resets its hover animation while pressed; keep the highlight.
++    const double hover = GetState() == STATE_PRESSED
++                             ? 1.0
++                             : hover_animation().GetCurrentValue();
++    SetBackground(views::CreateRoundedRectBackground(
++        gfx::Tween::ColorValueBetween(
++            hover, colors->GetColor(ui::kColorSubtleEmphasisBackground),
++            colors->GetColor(ui::kColorSysStateHoverOnSubtle)),
++        kCornerRadius));
++  }
++
++  raw_ptr<FavoriteDragDelegate> drag_;
++  gfx::Point press_point_;
 +  bool active_ = false;
-+  bool drop_target_ = false;
++  bool dragging_ = false;
++  bool dragged_since_press_ = false;
 +};
 +BEGIN_METADATA(FavoriteButton)
 +END_METADATA
@@ -1677,7 +1901,8 @@ index 000000000..7dd115cc2
 +class FavoritesView : public views::View,
 +                      public views::ContextMenuController,
 +                      public ui::SimpleMenuModel::Delegate,
-+                      public views::DragController {
++                      public views::BoundsAnimatorObserver,
++                      public FavoriteDragDelegate {
 +  METADATA_HEADER(FavoritesView, views::View)
 + public:
 +  FavoritesView(BrowserWindowInterface* browser, base::RepeatingClosure changed)
@@ -1700,66 +1925,17 @@ index 000000000..7dd115cc2
 +    scroll_ = AddChildView(std::make_unique<views::ScrollView>());
 +    scroll_->SetBackgroundColor(std::nullopt);
 +    grid_ = scroll_->SetContents(std::make_unique<views::View>());
++    animator_ = std::make_unique<views::BoundsAnimator>(grid_);
++    animator_->SetAnimationDuration(kSlideDuration);
++    animator_->AddObserver(this);
 +    add_->SetEnabled(false);
 +  }
++  ~FavoritesView() override { animator_->RemoveObserver(this); }
++
 +  int Height(int width) const {
 +    const int rows = (buttons_.size() + Columns(width) - 1) / Columns(width);
-+    return HeaderHeight(width) + std::min(168, rows * 54) + (rows ? 8 : 0);
-+  }
-+  bool GetDropFormats(int* formats,
-+                      std::set<ui::ClipboardFormatType>* types) override {
-+    *formats = ui::OSExchangeData::PICKLED_DATA;
-+    types->insert(FavoriteFormat());
-+    return true;
-+  }
-+  bool AreDropTypesRequired() override { return true; }
-+  bool CanDrop(const ui::OSExchangeData& data) override {
-+    return !ReadDrag(data).empty();
-+  }
-+  int OnDragUpdated(const ui::DropTargetEvent& event) override {
-+    drop_index_ = IndexAt(event.location());
-+    for (size_t i = 0; i < buttons_.size(); ++i) {
-+      buttons_[i]->SetDropTarget(i == drop_index_);
-+    }
-+    return ui::DragDropTypes::DRAG_MOVE;
-+  }
-+  void OnDragExited() override {
-+    for (auto& button : buttons_) {
-+      button->SetDropTarget(false);
-+    }
-+  }
-+  DropCallback GetDropCallback(const ui::DropTargetEvent& event) override {
-+    std::string id = ReadDrag(event.data());
-+    const size_t index = IndexAt(event.location());
-+    OnDragExited();
-+    return base::BindOnce(
-+        [](base::WeakPtr<FavoritesView> view, std::string id, size_t index,
-+           const ui::DropTargetEvent&, ui::mojom::DragOperation& operation,
-+           std::unique_ptr<ui::LayerTreeOwner>) {
-+          if (view && view->controller_.Move(id, index)) {
-+            operation = ui::mojom::DragOperation::kMove;
-+          }
-+        },
-+        weak_factory_.GetWeakPtr(), id, index);
-+  }
-+  void WriteDragDataForView(views::View* sender,
-+                            const gfx::Point& press_point,
-+                            ui::OSExchangeData* data) override {
-+    base::Pickle pickle;
-+    pickle.WriteString(IdFor(sender));
-+    data->SetPickledData(FavoriteFormat(), pickle);
-+    // Cocoa requires a non-empty image to start a native dragging session.
-+    auto* button = views::AsViewClass<FavoriteButton>(sender);
-+    data->provider().SetDragImage(button->GetImage(views::Button::STATE_NORMAL),
-+                                  press_point.OffsetFromOrigin());
-+  }
-+  int GetDragOperationsForView(views::View*, const gfx::Point&) override {
-+    return ui::DragDropTypes::DRAG_MOVE;
-+  }
-+  bool CanStartDragForView(views::View*,
-+                           const gfx::Point& press,
-+                           const gfx::Point& current) override {
-+    return ExceededDragThreshold(current - press);
++    return HeaderHeight(width) + std::min(168, rows * kRowHeight) +
++           (rows ? 8 : 0);
 +  }
 +  void ExecuteCommand(int command, int) override {
 +    const auto id = menu_id_;
@@ -1792,9 +1968,115 @@ index 000000000..7dd115cc2
 +           (command != 4 || it + 1 != saved.end());
 +  }
 +
++  // FavoriteDragDelegate:
++  void DragStarted(FavoriteButton* button, const gfx::Point& press) override {
++    const auto it = std::ranges::find(buttons_, button);
++    if (it == buttons_.end()) {
++      button->AbandonDrag();
++      return;
++    }
++    const size_t from = it - buttons_.begin();
++    drag_ = Drag{button, ids_[from], press.OffsetFromOrigin(), from, ids_,
++                 buttons_};
++    animator_->StopAnimatingView(button);
++    // Paint the lifted tile above its neighbours while it moves.
++    grid_->ReorderChildView(button, grid_->children().size());
++    button->AnimateScale(kLiftedScale, kLiftDuration);
++  }
++  void DragMoved(FavoriteButton* button, const gfx::Point& point) override {
++    if (!drag_ || drag_->button != button) {
++      return;
++    }
++    gfx::Point pointer = point;
++    views::View::ConvertPointToTarget(button, grid_, &pointer);
++    gfx::Rect bounds(pointer - drag_->grab, button->size());
++    bounds.AdjustToFit(gfx::Rect(grid_->size()));
++    button->SetBoundsRect(bounds);
++    const size_t from = std::ranges::find(buttons_, button) - buttons_.begin();
++    const size_t to = SlotAt(bounds.CenterPoint());
++    if (to != from) {
++      MoveItem(buttons_, from, to);
++      MoveItem(ids_, from, to);
++      AnimateToSlots();
++    }
++  }
++  void DragEnded(FavoriteButton* button, bool canceled) override {
++    if (!drag_ || drag_->button != button) {
++      return;
++    }
++    Drag drag = std::move(*drag_);
++    drag_.reset();
++    if (canceled) {
++      ids_ = drag.ids;
++      buttons_ = drag.buttons;
++    }
++    button->AnimateScale(1.f, kLiftDuration);
++    AnimateToSlots();
++    const size_t to = std::ranges::find(ids_, drag.id) - ids_.begin();
++    if (!canceled && to != drag.from && !controller_.Move(drag.id, to)) {
++      // The saved order changed underneath the drag; show it as saved.
++      ids_ = drag.ids;
++      buttons_ = drag.buttons;
++      AnimateToSlots();
++    }
++  }
++
++  // views::BoundsAnimatorObserver:
++  void OnBoundsAnimatorProgressed(views::BoundsAnimator*) override {}
++  void OnBoundsAnimatorDone(views::BoundsAnimator*) override {
++    if (drag_) {
++      return;
++    }
++    // Restore paint and focus order once tiles have settled.
++    for (size_t i = 0; i < buttons_.size(); ++i) {
++      grid_->ReorderChildView(buttons_[i], i);
++    }
++  }
++
 + private:
-+  static int Columns(int width) { return std::clamp((width - 16) / 54, 1, 4); }
++  struct Drag {
++    raw_ptr<FavoriteButton> button;
++    std::string id;
++    gfx::Vector2d grab;
++    size_t from;
++    std::vector<std::string> ids;
++    std::vector<raw_ptr<FavoriteButton>> buttons;
++  };
++
++  static int Columns(int width) {
++    return std::clamp((width - 16) / kRowHeight, 1, 4);
++  }
 +  static int HeaderHeight(int width) { return width >= 100 ? 30 : 0; }
++  int TileWidth() const {
++    const int cols = Columns(width());
++    return std::max(24, (width() - 12 - (cols - 1) * kTileGap) / cols);
++  }
++  gfx::Rect SlotBounds(size_t index) const {
++    const int cols = Columns(width());
++    const int tile_width = TileWidth();
++    return gfx::Rect((index % cols) * (tile_width + kTileGap),
++                     (index / cols) * kRowHeight, tile_width, kTileHeight);
++  }
++  size_t SlotAt(const gfx::Point& point) const {
++    const int cols = Columns(width());
++    const int col =
++        std::clamp(point.x() / (TileWidth() + kTileGap), 0, cols - 1);
++    const size_t slot = std::max(0, point.y()) / kRowHeight * cols + col;
++    return std::min(slot, buttons_.size() - 1);
++  }
++  // Slides every resting tile to its slot; the dragged tile follows the
++  // pointer instead.
++  void AnimateToSlots() {
++    for (size_t i = 0; i < buttons_.size(); ++i) {
++      FavoriteButton* button = buttons_[i];
++      if (drag_ && drag_->button == button) {
++        continue;
++      }
++      if (animator_->GetTargetBounds(button) != SlotBounds(i)) {
++        animator_->AnimateViewTo(button, SlotBounds(i));
++      }
++    }
++  }
 +  void Layout(PassKey) override {
 +    const int header = HeaderHeight(width());
 +    label_->SetVisible(header != 0);
@@ -1804,13 +2086,79 @@ index 000000000..7dd115cc2
 +    scroll_->SetBounds(6, header, std::max(0, width() - 12),
 +                       std::max(0, height() - header - 8));
 +    const int cols = Columns(width());
-+    const int tile_width = std::max(24, (width() - 12 - (cols - 1) * 6) / cols);
 +    const int rows = (buttons_.size() + cols - 1) / cols;
-+    grid_->SetPreferredSize(gfx::Size(std::max(0, width() - 12), rows * 54));
-+    grid_->SetSize(gfx::Size(std::max(0, width() - 12), rows * 54));
++    grid_->SetPreferredSize(
++        gfx::Size(std::max(0, width() - 12), rows * kRowHeight));
++    grid_->SetSize(gfx::Size(std::max(0, width() - 12), rows * kRowHeight));
 +    for (size_t i = 0; i < buttons_.size(); ++i) {
-+      buttons_[i]->SetBounds((i % cols) * (tile_width + 6), (i / cols) * 54,
-+                             tile_width, 48);
++      if (buttons_[i]->bounds().IsEmpty()) {
++        buttons_[i]->SetBoundsRect(SlotBounds(i));  // New tiles fade in place.
++      }
++    }
++    if (animate_next_layout_) {
++      animate_next_layout_ = false;
++      AnimateToSlots();
++    }
++    // Width changes (sidebar resizing) apply at once; tiles already in motion
++    // retarget instead of jumping.
++    for (size_t i = 0; i < buttons_.size(); ++i) {
++      FavoriteButton* button = buttons_[i];
++      if (drag_ && drag_->button == button) {
++        continue;
++      }
++      if (animator_->IsAnimating(button)) {
++        animator_->SetTargetBounds(button, SlotBounds(i));
++      } else {
++        button->SetBoundsRect(SlotBounds(i));
++      }
++    }
++  }
++  FavoriteButton* AddButton(const std::string& id) {
++    auto* button = grid_->AddChildView(std::make_unique<FavoriteButton>(
++        base::BindRepeating(
++            [](FavoritesController* c, std::string id) { c->Open(id); },
++            base::Unretained(&controller_), id),
++        this));
++    button->set_context_menu_controller(this);
++    return button;
++  }
++  // Keeps existing tiles (and any motion in progress) across saved-order
++  // changes so reorders, additions and removals animate.
++  void SyncButtons(const std::vector<std::string>& ids) {
++    if (drag_ && drag_->ids != ids) {
++      // The saved list changed elsewhere mid-drag; drop the preview.
++      drag_->button->AbandonDrag();
++      drag_->button->AnimateScale(1.f, kLiftDuration);
++      ids_ = drag_->ids;
++      buttons_ = drag_->buttons;
++      drag_.reset();
++    }
++    if (drag_ || ids == ids_) {
++      return;
++    }
++    std::map<std::string, FavoriteButton*> existing;
++    for (size_t i = 0; i < ids_.size(); ++i) {
++      existing[ids_[i]] = buttons_[i];
++    }
++    const bool populated = !ids_.empty();
++    std::vector<raw_ptr<FavoriteButton>> buttons;
++    for (const auto& id : ids) {
++      if (auto node = existing.extract(id)) {
++        buttons.push_back(node.mapped());
++        continue;
++      }
++      FavoriteButton* button = AddButton(id);
++      if (populated) {
++        button->FadeIn();
++      }
++      buttons.push_back(button);
++    }
++    ids_ = ids;
++    buttons_ = std::move(buttons);
++    animate_next_layout_ = populated;
++    for (auto& [id, button] : existing) {
++      animator_->StopAnimatingView(button);
++      grid_->RemoveChildViewT(button);
 +    }
 +  }
 +  void Refresh() {
@@ -1819,28 +2167,15 @@ index 000000000..7dd115cc2
 +    for (const auto& entry : saved) {
 +      ids.push_back(entry.id);
 +    }
-+    if (ids != ids_) {
-+      buttons_.clear();
-+      grid_->RemoveAllChildViews();
-+      ids_ = ids;
-+      for (const auto& entry : saved) {
-+        auto* button = grid_->AddChildView(
-+            std::make_unique<FavoriteButton>(base::BindRepeating(
-+                [](FavoritesController* c, std::string id) { c->Open(id); },
-+                base::Unretained(&controller_), entry.id)));
-+        button->set_context_menu_controller(this);
-+        button->set_drag_controller(this);
-+        buttons_.push_back(button);
-+      }
-+    }
-+    for (size_t i = 0; i < saved.size(); ++i) {
-+      const auto& entry = saved[i];
++    SyncButtons(ids);
++    for (const auto& entry : saved) {
 +      auto* tab = controller_.FindTab(entry.id);
 +      auto* contents = tab ? tab->GetContents() : nullptr;
 +      const auto title = entry.title.empty()
 +                             ? base::UTF8ToUTF16(entry.url.host())
 +                             : entry.title;
-+      auto* button = buttons_[i].get();
++      FavoriteButton* button =
++          buttons_[std::ranges::find(ids_, entry.id) - ids_.begin()];
 +      button->SetAccessibleName(u"Favorite: " + title);
 +      button->SetTooltipText(title + u"\n" +
 +                             base::UTF8ToUTF16(entry.url.host()));
@@ -1901,29 +2236,6 @@ index 000000000..7dd115cc2
 +    }
 +    return {};
 +  }
-+  std::string ReadDrag(const ui::OSExchangeData& data) const {
-+    if (data.IsRendererTainted()) {
-+      return {};
-+    }
-+    auto pickle = data.GetPickledData(FavoriteFormat());
-+    if (!pickle) {
-+      return {};
-+    }
-+    std::string id;
-+    if (!base::PickleIterator(*pickle).ReadString(&id) ||
-+        std::ranges::find(ids_, id) == ids_.end()) {
-+      return {};
-+    }
-+    return id;
-+  }
-+  size_t IndexAt(gfx::Point point) const {
-+    views::View::ConvertPointToTarget(this, grid_, &point);
-+    const int cols = Columns(width());
-+    const int tile_width = std::max(24, (width() - 12 - (cols - 1) * 6) / cols);
-+    return std::clamp(std::max(0, point.y()) / 54 * cols +
-+                          std::clamp(point.x() / (tile_width + 6), 0, cols - 1),
-+                      0, std::max(0, static_cast<int>(ids_.size()) - 1));
-+  }
 +  void ShowContextMenuForViewImpl(
 +      views::View* source,
 +      const gfx::Point& point,
@@ -1948,12 +2260,14 @@ index 000000000..7dd115cc2
 +  raw_ptr<views::LabelButton> add_ = nullptr;
 +  raw_ptr<views::ScrollView> scroll_ = nullptr;
 +  raw_ptr<views::View> grid_ = nullptr;
++  std::unique_ptr<views::BoundsAnimator> animator_;
 +  std::vector<raw_ptr<FavoriteButton>> buttons_;
 +  std::vector<std::string> ids_;
++  std::optional<Drag> drag_;
++  bool animate_next_layout_ = false;
 +  std::map<std::string, ui::ImageModel> icons_;
 +  std::set<std::string> requested_icons_;
 +  base::CancelableTaskTracker icon_tasks_;
-+  size_t drop_index_ = 0;
 +  std::string menu_id_;
 +  std::unique_ptr<ui::SimpleMenuModel> menu_model_;
 +  std::unique_ptr<views::MenuRunner> menu_runner_;

@@ -242,3 +242,32 @@ all seven Favorites and the existing ordinary pinned tab remained. Google,
 GitHub, and Mixpanel authentication are verified; other services were not
 individually checked and can require fresh authentication. The code repair's
 GitHub verification run passed both jobs.
+
+
+## October 27 — Favorites motion and Cmd+T sizing
+
+Favorites now reorder by dragging inside the sidebar instead of through a macOS
+drag session: the tile lifts and follows the pointer, its neighbours slide
+aside, and release snaps it into place. Escape or lost mouse capture returns it,
+and a drag never counts as a click. Tiles fade their hover state, shrink
+slightly while pressed, and slide when reordered, added, or removed from the
+menu. With no pasteboard data involved, the earlier renderer-taint check on
+drops no longer applies. The Cmd+T bar fades in, and its height now comes from
+its rows; previously the last row was clipped.
+
+`scripts/patches.py --export` now regenerates the patch series and manifest
+from the checkout. Patch 0002 was regenerated once with standard index lines;
+its content is unchanged.
+
+Validation: the browser built; all 49 targeted native tests passed. The old
+drop test was replaced by one that sends real press, drag, Escape, and release
+events to tiles hosted in a widget. All 29 Python safeguard tests passed. In the
+relaunched app the Cmd+T bar measured 640×510 with all seven rows at full
+height, and Favorites tiles rendered normally. Animation timing and how dragging
+feels were not checked by automation and need a hands-on check.
+
+Known issues found during this pass, not fixed: the collapsed sidebar's toggle
+sits under the window's close button (macOS reports the close button at that
+point); the app menu still reads "About Brave", "Hide Brave", and "Quit Brave";
+and `gn check` fails for `//brave/browser/ui:ui` on the
+`chrome_web_contents_view_focus_helper.h` include in `brave_browser_view.cc`.
