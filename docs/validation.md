@@ -131,10 +131,12 @@ The separate UI profile confirmed:
   one through Cmd+T without creating a duplicate visible tab row.
 
 Native drop handling has a regression test that moves a saved entry and rejects
-unknown or renderer-tainted payloads. Physical mouse drag remains unverified:
-the macOS automation delivered press/release to the tile, but no drag movement
-reached its Views handler. Context-menu ordering is verified. Temporary pointer
-diagnostics were removed from the final patch.
+unknown or renderer-tainted payloads. The user confirmed that physically dragging
+the Wikipedia Favorite onto Example Domain reorders the two tiles. Context-menu
+ordering is also verified. The macOS automation delivered press/release to the
+tile without drag movement reaching its Views handler; that automation limitation
+did not reproduce with the user's mouse. Temporary pointer diagnostics were
+removed from the final patch.
 
 Favorites are limited to 12 HTTP(S) pages per profile. Ordinary pins are not
 automatically converted. Favorites are shared between windows of the same
