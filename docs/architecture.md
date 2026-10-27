@@ -72,3 +72,19 @@ attention rather than silently retaining an old engine indefinitely.
 Developer ID signing, notarization, update hosting, signing-key management,
 Safe Browsing configuration, crash reporting/privacy choices and release smoke
 tests remain open work. No production updater is configured by this milestone.
+
+## Favorites
+
+The profile preference `sidecar.favorites` stores ordered UUIDs, home URLs,
+titles and last visited URLs. A per-window controller binds entries to stable
+TabInterface handles, which survive WebContents discards. Only HTTP(S) pages
+can be added. Session restore reattaches matching pinned tabs; it does not
+convert unrelated normal tabs. Saved Favorites do not load pages merely by
+opening a window. Live bindings are separate in each window.
+
+The native Favorites grid renders these tabs once, while their native tab
+strip slots contribute zero height and stay hidden in vertical layout. The
+underlying pinned tab remains in Chromium's tab/session/lifecycle models.
+Moving a Favorite back to pinned tabs removes its saved Favorite entry but
+keeps its live tab. Drag reordering changes only the saved order. Drop data is
+an existing Favorite UUID, with renderer-originated payloads rejected.

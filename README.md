@@ -23,7 +23,9 @@ Those checks do not compile the full browser or certify a distributable release.
 - **Cmd+W on the active pinned tab preserves its pin**, selects another tab,
   and unloads the page when safe. Closing the last pin creates a landing tab.
   Ordinary tabs still close normally.
-- The native development app compiled and launched; all 39 targeted native
+- Favorites live in a persistent icon grid above ordinary pins, with saved-URL
+  reset, ordering, and Cmd+T integration.
+- The native development app compiled and launched; all 49 targeted native
   tests passed on October 27, 2026, along with 22 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
@@ -86,15 +88,23 @@ An expanded sidebar reserves its own space beside the page instead of covering
 page content. The toolbar stays visible for external pages with security warnings. Switching
 tabs no longer briefly reveals the full toolbar over the sidebar.
 
-The command bar currently searches tabs in the current window, then uses the
-profile's default search engine or URL classifier. It does not yet show history,
-bookmark suggestions, or general browser commands. Spaces and folders remain
-future work.
+Favorites have their own icon grid above the tab list. Use the **+** beside
+Favorites on a website, or type **favorite** in Cmd+T to save the current tab.
+Up to 12 Favorites are saved per profile. Drag their tiles to reorder them;
+right-click for **Reset to saved URL**, **Move to pinned tabs**, or keyboard-
+accessible ordering commands. Existing pins stay in their normal list. Cmd+W
+keeps the Favorite, using the same unload safeguards as other pins. Clicking a
+Favorite reuses its live tab, or opens its saved URL if no tab remains.
+
+The command bar searches tabs in the current window and saved Favorites, then
+uses the profile's default search engine or URL classifier. It does not yet
+show history, bookmark suggestions, or general browser commands. Spaces and
+folders remain future work.
 
 Pin retention currently applies to the active tab's close command (including
-Cmd+W). Pages with unload handlers remain loaded to protect unsaved work. Pin
-reopening keeps its last URL; resetting to an original pinned URL and broader
-bulk/context-menu close behavior remain to be implemented. Unpinning and then
+Cmd+W). Pages with unload handlers remain loaded to protect unsaved work. Ordinary pin
+reopening keeps its last URL; saved-URL reset currently applies to Favorites.
+Broader bulk/context-menu close behavior remains to be implemented. Unpinning and then
 closing still removes a tab normally.
 
 See [the validation record](docs/validation.md) for tested interactions and

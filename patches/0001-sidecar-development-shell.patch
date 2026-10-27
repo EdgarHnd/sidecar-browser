@@ -20,21 +20,22 @@ index 5c0c8b1da..410dca5cf 100644
 -MAC_TEAM_ID=KL8N8XSYF4
 +MAC_TEAM_ID=
 diff --git a/browser/ui/tabs/brave_tab_prefs.cc b/browser/ui/tabs/brave_tab_prefs.cc
-index 7b953d520..e89f636c3 100644
+index 7b953d520..7cafce1bd 100644
 --- a/browser/ui/tabs/brave_tab_prefs.cc
 +++ b/browser/ui/tabs/brave_tab_prefs.cc
-@@ -18,8 +18,9 @@
+@@ -18,8 +18,10 @@
  namespace brave_tabs {
  
  void RegisterBraveProfilePrefs(PrefRegistrySimple* registry) {
 +  registry->RegisterBooleanPref(kSidecarPolishedUIInitialized, false);
++  registry->RegisterListPref(kSidecarFavorites);
    registry->RegisterIntegerPref(kTabHoverMode, TabHoverMode::CARD);
 -  registry->RegisterBooleanPref(kVerticalTabsEnabled, false);
 +  registry->RegisterBooleanPref(kVerticalTabsEnabled, true);
    registry->RegisterBooleanPref(kVerticalTabsCollapsed, false);
    registry->RegisterBooleanPref(kVerticalTabsExpandedStatePerWindow, false);
  #if BUILDFLAG(IS_WIN)
-@@ -37,7 +38,7 @@ void RegisterBraveProfilePrefs(PrefRegistrySimple* registry) {
+@@ -37,7 +39,7 @@ void RegisterBraveProfilePrefs(PrefRegistrySimple* registry) {
  
    registry->RegisterBooleanPref(kVerticalTabsFloatingEnabled, true);
    registry->RegisterBooleanPref(kVerticalTabsShowToggleButton, true);
@@ -44,19 +45,20 @@ index 7b953d520..e89f636c3 100644
    registry->RegisterBooleanPref(kVerticalTabsShowScrollbar, false);
    registry->RegisterBooleanPref(kShowHorizontalTabScrollButtons, false);
 diff --git a/browser/ui/tabs/brave_tab_prefs.h b/browser/ui/tabs/brave_tab_prefs.h
-index 018489d9f..18cb6f289 100644
+index 018489d9f..3c06e2aa7 100644
 --- a/browser/ui/tabs/brave_tab_prefs.h
 +++ b/browser/ui/tabs/brave_tab_prefs.h
-@@ -13,6 +13,9 @@ class PrefService;
+@@ -12,6 +12,10 @@ class PrefRegistrySimple;
+ class PrefService;
  
  namespace brave_tabs {
- 
++inline constexpr char kSidecarFavorites[] = "sidecar.favorites";
++
 +inline constexpr char kSidecarPolishedUIInitialized[] =
 +    "sidecar.polished_ui_initialized";
-+
+ 
  enum TabHoverMode { TOOLTIP = 0, CARD = 1, CARD_WITH_PREVIEW = 2 };
  
- inline constexpr char kTabHoverMode[] = "brave.tabs.hover_mode";
 diff --git a/browser/ui/tabs/test/vertical_tab_controller_unittest.cc b/browser/ui/tabs/test/vertical_tab_controller_unittest.cc
 index a20f71f2c..d24d4ef6e 100644
 --- a/browser/ui/tabs/test/vertical_tab_controller_unittest.cc

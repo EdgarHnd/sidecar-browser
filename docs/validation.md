@@ -107,3 +107,36 @@ the original Keychain authorization failure or the later counter assertion.
 The development launcher now uses LaunchServices with the existing profile,
 source-version guard, and build/test receipt checks intact. Per-launch logs
 remain local and ignored. No Keychain permissions or encryption settings changed.
+
+
+## October 27 — Favorites
+
+The native application compiled with the Favorites model and icon grid. All
+49 targeted native tests passed (the previous 39 plus ten Favorites tests),
+and all 22 Python safeguards passed. GN header dependency checks passed for
+the Favorites model, grid, and unit-test target. The source/build/test receipts
+match the final patch bundle.
+
+The separate UI profile confirmed:
+
+- Add a website using the Favorites **+** or the Cmd+T **favorite** action.
+- Render its favicon in the grid without a duplicate row among ordinary pins.
+- Cmd+W keeps the Favorite and selects another tab; clicking it returns to it.
+- Reset a navigated Favorite to its originally saved URL from the context menu.
+- Move a Favorite back to ordinary pinned tabs while keeping its page open.
+- Move earlier/later from the context menu; saved order survives app restart.
+- Restore both Favorite entries and cached icons after restarting the app.
+- Keep an accessible Expand sidebar button in collapsed mode, above the grid.
+- Show saved Favorites in a new window before loading their pages, then open
+  one through Cmd+T without creating a duplicate visible tab row.
+
+Native drop handling has a regression test that moves a saved entry and rejects
+unknown or renderer-tainted payloads. Physical mouse drag remains unverified:
+the macOS automation delivered press/release to the tile, but no drag movement
+reached its Views handler. Context-menu ordering is verified. Temporary pointer
+diagnostics were removed from the final patch.
+
+Favorites are limited to 12 HTTP(S) pages per profile. Ordinary pins are not
+automatically converted. Favorites are shared between windows of the same
+profile; each window opens its own live tab when needed. Spaces and folders
+remain future work. This is a development build, not release certification.

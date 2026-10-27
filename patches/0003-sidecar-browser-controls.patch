@@ -1,50 +1,111 @@
 diff --git a/browser/ui/BUILD.gn b/browser/ui/BUILD.gn
-index e30f19d4a..37e6637cd 100644
+index e30f19d4a..964be0f98 100644
 --- a/browser/ui/BUILD.gn
 +++ b/browser/ui/BUILD.gn
-@@ -106,6 +106,9 @@ source_set("ui") {
-     "//brave/components/webcompat/core/common",
-     "//brave/ui/webui/custom_profile_image/buildflags",
+@@ -37,12 +37,43 @@ import("//mojo/public/tools/bindings/mojom.gni")
+ import("//third_party/widevine/cdm/widevine.gni")
+ 
+ # See //chrome/browser/ui:ui_public_dependencies.
++if (!is_android) {
++  source_set("sidecar_favorites_header") {
++    sources = [ "sidecar_favorites.h" ]
++    public_deps = [
++      "//base",
++      "//chrome/browser/ui/tabs:tab_strip_model_observer",
++      "//components/prefs",
++      "//components/tabs:public",
++      "//url",
++    ]
++  }
++
++  source_set("sidecar_favorites") {
++    sources = [ "sidecar_favorites.cc" ]
++    public_deps = [ ":sidecar_favorites_header" ]
++    deps = [
++      ":brave_tab_prefs",
++      "//chrome/browser/profiles:profile",
++      "//chrome/browser/ui/browser_window",
++      "//chrome/browser/ui/navigator",
++      "//chrome/browser/ui/tabs:tab_strip",
++      "//content/public/browser",
++    ]
++  }
++}
++
+ group("ui_public_dependencies") {
+   visibility = [
+     "//brave/browser/ui",
+     "//chrome/browser/ui:ui_public_dependencies",
+   ]
+-  public_deps = [
++  if (!is_android) {
++    public_deps = [ ":sidecar_favorites_header" ]
++  } else {
++    public_deps = []
++  }
++  public_deps += [
+     ":brave_tab_prefs",
+     "//brave/components/brave_wallet/common/buildflags",
+     "//brave/components/brave_wayback_machine/buildflags",
+@@ -108,10 +139,12 @@ source_set("ui") {
      "//chrome/browser:command_updater_impl",
-+    "//chrome/browser/autocomplete",
-+    "//chrome/browser/resource_coordinator",
-+    "//components/omnibox/browser",
      "//chrome/browser:defaults",
      "//chrome/browser:file_select_helper",
++    "//chrome/browser/autocomplete",
      "//chrome/browser/contextual_search",
-@@ -390,6 +393,8 @@ source_set("ui") {
-       "brave_view_ids.h",
-       "browser_commands.cc",
-       "browser_commands.h",
+     "//chrome/browser/history",
+     "//chrome/browser/history_embeddings",
+     "//chrome/browser/image_fetcher",
++    "//chrome/browser/resource_coordinator",
+     "//chrome/browser/ui:tab_modal_confirm_dialog_delegate",
+     "//chrome/browser/ui/browser_window",
+     "//chrome/browser/ui/navigator",
+@@ -120,6 +153,7 @@ source_set("ui") {
+     "//chrome/browser/ui/tabs:tabs_public",
+     "//chrome/browser/ui/toolbar",
+     "//chrome/browser/ui/webui:chrome_web_ui_controller_factory",
++    "//components/omnibox/browser",
+     "//media",
+     "//ui/base/unowned_user_data",
+   ]
+@@ -400,6 +434,8 @@ source_set("ui") {
+       "omnibox/brave_omnibox_client_impl.cc",
+       "omnibox/brave_omnibox_client_impl.h",
+       "session_crashed_bubble_brave.cc",
 +      "sidecar_browser_controls.cc",
 +      "sidecar_browser_controls.h",
-       "browser_dialogs.h",
-       "content_settings/brave_autoplay_blocked_image_model.cc",
-       "content_settings/brave_autoplay_blocked_image_model.h",
-@@ -572,6 +577,7 @@ source_set("ui") {
-       "//components/password_manager/core/browser/ui",
-       "//components/pref_registry",
+       "startup/brave_startup_tab_provider_impl.cc",
+       "startup/brave_startup_tab_provider_impl.h",
+       "tabs/brave_tab_color_mixer.cc",
+@@ -574,6 +610,7 @@ source_set("ui") {
        "//components/prefs",
-+    "//components/vector_icons",
        "//components/regional_capabilities",
        "//components/user_prefs",
++      "//components/vector_icons",
        "//content/public/browser",
-@@ -1625,6 +1631,7 @@ source_set("unit_tests") {
-     testonly = true
-     sources = [
-       "brave_file_select_utils_unittest.cc",
-+      "sidecar_browser_controls_unittest.cc",
+       "//content/public/common",
+       "//extensions/buildflags",
+@@ -1628,6 +1665,7 @@ source_set("unit_tests") {
        "brave_layout_constants_unittest.cc",
        "brave_scheme_utils_unittest.cc",
        "managed_ui_unittest.cc",
-@@ -1637,6 +1644,7 @@ source_set("unit_tests") {
++      "sidecar_browser_controls_unittest.cc",
+       "tabs/brave_tab_prefs_unittest.cc",
+       "views/side_panel/side_panel_web_ui_view_unittest.cc",
+     ]
+@@ -1635,9 +1673,12 @@ source_set("unit_tests") {
+       ":brave_tab_prefs",
+       "//base/test:test_support",
        "//brave/browser/ui/tabs:tabs_public",
++      "//brave/browser/ui/views/frame/vertical_tabs",
        "//brave/components/l10n/common:test_support",
++      "//chrome/browser:chrome_content_browser_client",
        "//chrome/browser/ui",
-+      "//chrome/test:test_support",
        "//chrome/browser/ui/tabs:features",
++      "//chrome/test:test_support",
        "//components/javascript_dialogs",
        "//components/prefs:test_support",
+       "//testing/gmock",
 diff --git a/browser/ui/brave_browser_command_controller.cc b/browser/ui/brave_browser_command_controller.cc
 index f77b1070c..954434fea 100644
 --- a/browser/ui/brave_browser_command_controller.cc
@@ -78,10 +139,10 @@ index f77b1070c..954434fea 100644
               : BrowserCommandController::
 diff --git a/browser/ui/sidecar_browser_controls.cc b/browser/ui/sidecar_browser_controls.cc
 new file mode 100644
-index 000000000..e60961989
+index 000000000..2beb67502
 --- /dev/null
 +++ b/browser/ui/sidecar_browser_controls.cc
-@@ -0,0 +1,484 @@
+@@ -0,0 +1,542 @@
 +// Copyright 2026 The Sidecar Authors. MPL-2.0.
 +#include "brave/browser/ui/sidecar_browser_controls.h"
 +
@@ -98,6 +159,7 @@ index 000000000..e60961989
 +#include "base/strings/utf_string_conversions.h"
 +#include "base/task/sequenced_task_runner.h"
 +#include "brave/browser/new_tab/new_tab_shows_options.h"
++#include "brave/browser/ui/sidecar_favorites.h"
 +#include "brave/browser/ui/tabs/brave_tab_prefs.h"
 +#include "brave/components/constants/pref_names.h"
 +#include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
@@ -335,6 +397,7 @@ index 000000000..e60961989
 +  void Refresh() {
 +    buttons_.clear();
 +    targets_.clear();
++    favorite_targets_.clear();
 +    results_->RemoveAllChildViews();
 +    selected_ = 0;
 +    if (!browser_) {
@@ -362,6 +425,29 @@ index 000000000..e60961989
 +                     });
 +    const size_t max_tabs = std::clamp(
 +        (browser_->GetWindow()->GetBounds().height() - 208) / 56, 1, 6);
++    auto* favorites = FavoritesController::ForBrowser(browser_.get());
++    if (favorites && query.find(u"favorite") != std::u16string::npos &&
++        favorites->CanAddActive()) {
++      AddResult(
++          u"Add current tab to Favorites",
++          u"Keep it at the top of your sidebar", u"Add  ↵", nullptr,
++          ui::ImageModel::FromVectorIcon(vector_icons::kGlobeIcon,
++                                         ui::kColorSecondaryForeground, 20),
++          "#add");
++    }
++    if (favorites && query.find(u"favorite") != std::u16string::npos) {
++      for (const auto& entry : favorites->entries()) {
++        if (favorites->FindTab(entry.id) == model->GetActiveTab()) {
++          AddResult(
++              u"Move current Favorite to pinned tabs",
++              u"Keep the tab in your pinned list", u"Move  ↵", nullptr,
++              ui::ImageModel::FromVectorIcon(vector_icons::kGlobeIcon,
++                                             ui::kColorSecondaryForeground, 20),
++              "#remove:" + entry.id);
++          break;
++        }
++      }
++    }
 +    for (int i : candidates) {
 +      if (targets_.size() == max_tabs) {
 +        break;
@@ -378,9 +464,29 @@ index 000000000..e60961989
 +      const auto url = contents->GetVisibleURL();
 +      AddResult(contents->GetTitle().empty() ? base::UTF8ToUTF16(url.spec())
 +                                             : contents->GetTitle(),
-+                (model->IsTabPinned(i) ? u"Pinned · " : u"") +
++                (IsFavoriteTab(model->GetTabAtIndex(i)) ? u"Favorite · "
++                 : model->IsTabPinned(i)                ? u"Pinned · "
++                                                        : u"") +
 +                    base::UTF8ToUTF16(url.host()),
 +                u"Switch to tab  ↵", contents->GetWeakPtr(), icon);
++    }
++    if (favorites && !query.empty()) {
++      for (const auto& entry : favorites->entries()) {
++        if (targets_.size() >= max_tabs) {
++          break;
++        }
++        const auto searchable = base::ToLowerASCII(
++            entry.title + u" " + base::UTF8ToUTF16(entry.url.spec()));
++        if (!favorites->FindTab(entry.id) &&
++            searchable.find(query) != std::u16string::npos) {
++          AddResult(
++              entry.title, u"Favorite · " + base::UTF8ToUTF16(entry.url.host()),
++              u"Open Favorite  ↵", nullptr,
++              ui::ImageModel::FromVectorIcon(vector_icons::kGlobeIcon,
++                                             ui::kColorSecondaryForeground, 20),
++              entry.id);
++        }
++      }
 +    }
 +    AddResult(
 +        query.empty() ? u"New tab" : std::u16string(input_->GetText()),
@@ -401,9 +507,11 @@ index 000000000..e60961989
 +                 const std::u16string& detail,
 +                 const std::u16string& action,
 +                 base::WeakPtr<content::WebContents> contents,
-+                 const ui::ImageModel& icon) {
++                 const ui::ImageModel& icon,
++                 const std::string& favorite_id = {}) {
 +    const size_t index = targets_.size();
 +    targets_.push_back(contents);
++    favorite_targets_.push_back(favorite_id);
 +    auto* button = results_->AddChildView(std::make_unique<CommandResult>(
 +        base::BindRepeating(&CommandBar::Open, base::Unretained(this), index),
 +        title, detail, action, icon));
@@ -436,7 +544,17 @@ index 000000000..e60961989
 +      return;
 +    }
 +    auto* model = browser_->GetTabStripModel();
-+    if (auto contents = targets_[index]) {
++    if (!favorite_targets_[index].empty()) {
++      if (auto* favorites = FavoritesController::ForBrowser(browser_.get())) {
++        if (favorite_targets_[index] == "#add") {
++          favorites->AddActive();
++        } else if (favorite_targets_[index].starts_with("#remove:")) {
++          favorites->Remove(favorite_targets_[index].substr(8));
++        } else {
++          favorites->Open(favorite_targets_[index]);
++        }
++      }
++    } else if (auto contents = targets_[index]) {
 +      const int tab_index = model->GetIndexOfWebContents(contents.get());
 +      if (tab_index >= 0) {
 +        model->ActivateTabAt(tab_index);
@@ -480,6 +598,7 @@ index 000000000..e60961989
 +  raw_ptr<views::Textfield> input_ = nullptr;
 +  raw_ptr<views::View> results_ = nullptr;
 +  std::vector<raw_ptr<CommandResult>> buttons_;
++  std::vector<std::string> favorite_targets_;
 +  std::vector<base::WeakPtr<content::WebContents>> targets_;
 +  int selected_ = 0;
 +};
@@ -587,14 +706,22 @@ index 000000000..58e6c6b73
 +#endif
 diff --git a/browser/ui/sidecar_browser_controls_unittest.cc b/browser/ui/sidecar_browser_controls_unittest.cc
 new file mode 100644
-index 000000000..d6c750468
+index 000000000..8bdbab7dd
 --- /dev/null
 +++ b/browser/ui/sidecar_browser_controls_unittest.cc
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,308 @@
 +// Copyright 2026 The Sidecar Authors. MPL-2.0.
 +#include "brave/browser/ui/sidecar_browser_controls.h"
 +
++#include "base/functional/bind.h"
++#include "base/pickle.h"
++#include "base/run_loop.h"
++#include "base/test/bind.h"
++#include "base/test/run_until.h"
 +#include "brave/browser/new_tab/new_tab_shows_options.h"
++#include "brave/browser/ui/sidecar_favorites.h"
++#include "brave/browser/ui/tabs/brave_tab_prefs.h"
++#include "brave/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h"
 +#include "brave/components/constants/pref_names.h"
 +#include "chrome/browser/chrome_content_browser_client.h"
 +#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -607,7 +734,15 @@ index 000000000..d6c750468
 +#include "content/public/browser/web_contents.h"
 +#include "content/public/common/content_client.h"
 +#include "testing/gtest/include/gtest/gtest.h"
++#include "ui/base/clipboard/clipboard_format_type.h"
++#include "ui/base/dragdrop/drag_drop_types.h"
++#include "ui/base/dragdrop/drop_target_event.h"
++#include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
++#include "ui/base/dragdrop/os_exchange_data.h"
++#include "ui/compositor/layer_tree_owner.h"
++#include "ui/views/view.h"
 +#include "url/gurl.h"
++#include "url/origin.h"
 +
 +class SidecarPinnedTabTest : public BrowserWithTestWindowTest {
 + public:
@@ -686,6 +821,589 @@ index 000000000..d6c750468
 +            prefs->GetInteger(kNewTabPageShowsOptions));
 +  EXPECT_TRUE(prefs->GetBoolean(bookmarks::prefs::kShowBookmarkBar));
 +}
++
++TEST_F(SidecarPinnedTabTest, FavoritesPreserveOrdinaryPinsAndRejectDuplicates) {
++  AddTab(browser(), GURL("https://example.test/pinned"));
++  auto* model = browser()->GetTabStripModel();
++  model->SetTabPinned(0, true);
++  AddTab(browser(), GURL("https://example.test/favorite"));
++  sidecar::FavoritesController favorites(browser(), base::RepeatingClosure());
++  ASSERT_TRUE(favorites.AddActive());
++  ASSERT_EQ(1u, favorites.entries().size());
++  EXPECT_FALSE(favorites.AddActive());
++  EXPECT_TRUE(model->IsTabPinned(0));
++  EXPECT_FALSE(sidecar::IsFavoriteTab(model->GetTabAtIndex(0)));
++  EXPECT_TRUE(sidecar::IsFavoriteTab(model->GetActiveTab()));
++}
++
++TEST_F(SidecarPinnedTabTest, FavoriteSurvivesCloseAndReusesItsTab) {
++  AddTab(browser(), GURL("https://example.test/favorite"));
++  sidecar::FavoritesController favorites(browser(), base::RepeatingClosure());
++  ASSERT_TRUE(favorites.AddActive());
++  const auto id = favorites.entries()[0].id;
++  auto* model = browser()->GetTabStripModel();
++  ASSERT_TRUE(sidecar::ClosePinnedTab(browser()));
++  EXPECT_EQ(1u, favorites.entries().size());
++  favorites.Open(id);
++  EXPECT_EQ(2, model->count());
++  EXPECT_EQ(favorites.FindTab(id), model->GetActiveTab());
++  EXPECT_TRUE(sidecar::IsFavoriteTab(model->GetActiveTab()));
++}
++
++TEST_F(SidecarPinnedTabTest, FavoritesReorderPersistAndReturnToPinnedTabs) {
++  auto* model = browser()->GetTabStripModel();
++  std::string first, second;
++  {
++    sidecar::FavoritesController favorites(browser(), base::RepeatingClosure());
++    AddTab(browser(), GURL("https://example.test/first"));
++    ASSERT_TRUE(favorites.AddActive());
++    first = favorites.entries()[0].id;
++    AddTab(browser(), GURL("https://example.test/second"));
++    ASSERT_TRUE(favorites.AddActive());
++    second = favorites.entries()[1].id;
++    EXPECT_TRUE(favorites.Move(second, 0));
++    EXPECT_EQ(second, favorites.entries()[0].id);
++    EXPECT_FALSE(favorites.Move(first, 99));
++  }
++  bool refreshed = false;
++  sidecar::FavoritesController restored(
++      browser(), base::BindLambdaForTesting([&] { refreshed = true; }));
++  ASSERT_TRUE(base::test::RunUntil([&] { return refreshed; }));
++  EXPECT_EQ(second, restored.entries()[0].id);
++  ASSERT_NE(nullptr, restored.FindTab(first));
++  auto handle = restored.FindTab(first)->GetHandle();
++  EXPECT_TRUE(restored.Remove(first));
++  EXPECT_FALSE(sidecar::IsFavoriteTab(handle.Get()));
++  EXPECT_TRUE(model->IsTabPinned(model->GetIndexOfTab(handle.Get())));
++  EXPECT_EQ(2, model->count());
++}
++
++TEST_F(SidecarPinnedTabTest, FavoritesLimitAndUnsafePages) {
++  sidecar::FavoritesController favorites(browser(), base::RepeatingClosure());
++  AddTab(browser(), GURL("chrome://newtab/"));
++  EXPECT_FALSE(favorites.CanAddActive());
++  EXPECT_FALSE(favorites.AddActive());
++  for (size_t i = 0; i < sidecar::kMaxFavorites; ++i) {
++    AddTab(browser(), GURL("https://example.test/" + std::to_string(i)));
++    EXPECT_TRUE(favorites.AddActive());
++  }
++  AddTab(browser(), GURL("https://example.test/extra"));
++  EXPECT_FALSE(favorites.AddActive());
++  EXPECT_EQ(sidecar::kMaxFavorites, favorites.entries().size());
++}
++
++TEST_F(SidecarPinnedTabTest, ClosingAllTabsKeepsSavedFavorites) {
++  sidecar::FavoritesController favorites(browser(), base::RepeatingClosure());
++  AddTab(browser(), GURL("https://example.test/favorite"));
++  ASSERT_TRUE(favorites.AddActive());
++  browser()->GetTabStripModel()->CloseAllTabs();
++  EXPECT_EQ(1u, favorites.entries().size());
++  EXPECT_EQ(nullptr, favorites.FindTab(favorites.entries()[0].id));
++}
++
++TEST_F(SidecarPinnedTabTest,
++       FavoriteKeepsHomeWhileNavigationAndRestoreKeepItsTab) {
++  std::string id;
++  {
++    bool refreshed = false;
++    sidecar::FavoritesController favorites(
++        browser(), base::BindLambdaForTesting([&] { refreshed = true; }));
++    AddTab(browser(), GURL("https://example.test/home"));
++    ASSERT_TRUE(favorites.AddActive());
++    id = favorites.entries()[0].id;
++    NavigateAndCommitActiveTab(GURL("https://example.test/article"));
++    ASSERT_TRUE(base::test::RunUntil([&] { return refreshed; }));
++    EXPECT_EQ(GURL("https://example.test/home"), favorites.entries()[0].url);
++    EXPECT_EQ(GURL("https://example.test/article"),
++              favorites.entries()[0].last_url);
++  }
++  bool refreshed = false;
++  sidecar::FavoritesController restored(
++      browser(), base::BindLambdaForTesting([&] { refreshed = true; }));
++  ASSERT_TRUE(base::test::RunUntil([&] { return refreshed; }));
++  EXPECT_EQ(browser()->GetTabStripModel()->GetActiveTab(),
++            restored.FindTab(id));
++}
++
++TEST_F(SidecarPinnedTabTest, SavedFavoritesOpenByReusingRegularTabs) {
++  AddTab(browser(), GURL("https://example.test/home"));
++  sidecar::FavoritesController favorites(browser(), base::RepeatingClosure());
++  ASSERT_TRUE(favorites.AddActive());
++  const auto id = favorites.entries()[0].id;
++  auto* model = browser()->GetTabStripModel();
++  model->SetTabPinned(0, false);
++  EXPECT_EQ(nullptr, favorites.FindTab(id));
++  favorites.Open(id);
++  EXPECT_EQ(1, model->count());
++  EXPECT_TRUE(model->IsTabPinned(0));
++  EXPECT_EQ(model->GetActiveTab(), favorites.FindTab(id));
++}
++
++TEST_F(SidecarPinnedTabTest,
++       FavoritesSharedWithinProfileAndSeparatedAcrossProfiles) {
++  sidecar::FavoritesController first(browser(), base::RepeatingClosure());
++  AddTab(browser(), GURL("https://example.test/home"));
++  ASSERT_TRUE(first.AddActive());
++  const auto id = first.entries()[0].id;
++  auto second_browser =
++      CreateBrowser(profile(), BrowserWindowInterface::TYPE_NORMAL, false);
++  auto other_profile = std::make_unique<TestingProfile>();
++  auto other_browser = CreateBrowser(
++      other_profile.get(), BrowserWindowInterface::TYPE_NORMAL, false);
++  {
++    sidecar::FavoritesController second(second_browser.get(),
++                                        base::RepeatingClosure());
++    sidecar::FavoritesController other(other_browser.get(),
++                                       base::RepeatingClosure());
++    EXPECT_EQ(id, second.entries()[0].id);
++    EXPECT_TRUE(other.entries().empty());
++    EXPECT_EQ(nullptr, second.FindTab(id));
++    EXPECT_TRUE(second.Remove(id));
++    EXPECT_TRUE(first.entries().empty());
++  }
++  second_browser->GetTabStripModel()->CloseAllTabs();
++  other_browser->GetTabStripModel()->CloseAllTabs();
++}
++
++TEST_F(SidecarPinnedTabTest, InvalidSavedFavoritesAreIgnored) {
++  base::ListValue values;
++  values.Append("malformed");
++  base::DictValue unsafe;
++  unsafe.Set("id", "invalid");
++  unsafe.Set("url", "javascript:alert(1)");
++  values.Append(std::move(unsafe));
++  profile()->GetPrefs()->SetList(brave_tabs::kSidecarFavorites,
++                                 std::move(values));
++  sidecar::FavoritesController favorites(browser(), base::RepeatingClosure());
++  EXPECT_TRUE(favorites.entries().empty());
++}
++
++TEST_F(SidecarPinnedTabTest, FavoriteDropReordersAndRejectsForeignData) {
++  auto view = sidecar::CreateFavoritesView(browser(), base::RepeatingClosure());
++  auto* favorites = sidecar::FavoritesController::ForBrowser(browser());
++  ASSERT_TRUE(favorites);
++  AddTab(browser(), GURL("https://example.test/first"));
++  ASSERT_TRUE(favorites->AddActive());
++  AddTab(browser(), GURL("https://example.test/second"));
++  ASSERT_TRUE(favorites->AddActive());
++  const auto second = favorites->entries()[1].id;
++  base::RunLoop().RunUntilIdle();
++  view->SetBounds(0, 0, 260, 100);
++  view->DeprecatedLayoutImmediately();
++
++  const auto format =
++      ui::ClipboardFormatType::CustomPlatformType("org.sidecar.favorite");
++  base::Pickle pickle;
++  pickle.WriteString(second);
++  ui::OSExchangeData data;
++  data.SetPickledData(format, pickle);
++  EXPECT_TRUE(view->CanDrop(data));
++  const ui::DropTargetEvent event(data, gfx::PointF(20, 40),
++                                  gfx::PointF(20, 40),
++                                  ui::DragDropTypes::DRAG_MOVE);
++  EXPECT_EQ(ui::DragDropTypes::DRAG_MOVE, view->OnDragUpdated(event));
++  auto callback = view->GetDropCallback(event);
++  auto operation = ui::mojom::DragOperation::kNone;
++  std::move(callback).Run(event, operation, nullptr);
++  EXPECT_EQ(ui::mojom::DragOperation::kMove, operation);
++  EXPECT_EQ(second, favorites->entries()[0].id);
++
++  ui::OSExchangeData unrelated;
++  EXPECT_FALSE(view->CanDrop(unrelated));
++  base::Pickle unknown;
++  unknown.WriteString("not-a-saved-favorite");
++  unrelated.SetPickledData(format, unknown);
++  EXPECT_FALSE(view->CanDrop(unrelated));
++  data.MarkRendererTaintedFromOrigin(
++      url::Origin::Create(GURL("https://example.test")));
++  EXPECT_FALSE(view->CanDrop(data));
++}
+diff --git a/browser/ui/sidecar_favorites.cc b/browser/ui/sidecar_favorites.cc
+new file mode 100644
+index 000000000..efb2002f4
+--- /dev/null
++++ b/browser/ui/sidecar_favorites.cc
+@@ -0,0 +1,314 @@
++// Copyright 2026 The Sidecar Authors. MPL-2.0.
++#include "brave/browser/ui/sidecar_favorites.h"
++
++#include <algorithm>
++
++#include "base/functional/bind.h"
++#include "base/no_destructor.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/task/sequenced_task_runner.h"
++#include "base/uuid.h"
++#include "brave/browser/ui/tabs/brave_tab_prefs.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/navigator/browser_navigator.h"
++#include "chrome/browser/ui/navigator/browser_navigator_params.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "components/prefs/pref_service.h"
++#include "components/prefs/scoped_user_pref_update.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/web_contents.h"
++
++namespace sidecar {
++namespace {
++using Controllers = std::vector<FavoritesController*>;
++Controllers& AllControllers() {
++  static base::NoDestructor<Controllers> controllers;
++  return *controllers;
++}
++bool ValidURL(const GURL& url) {
++  return url.is_valid() && url.SchemeIsHTTPOrHTTPS();
++}
++}  // namespace
++FavoritesController::FavoritesController(BrowserWindowInterface* browser,
++                                         base::RepeatingClosure changed)
++    : browser_(browser->GetWeakPtr()), changed_(std::move(changed)) {
++  AllControllers().push_back(this);
++  browser->GetTabStripModel()->AddObserver(this);
++  prefs_observer_.Init(browser->GetProfile()->GetPrefs());
++  prefs_observer_.Add(brave_tabs::kSidecarFavorites,
++                      base::BindRepeating(&FavoritesController::ScheduleRefresh,
++                                          base::Unretained(this)));
++  ScheduleRefresh();
++}
++FavoritesController::~FavoritesController() {
++  std::erase(AllControllers(), this);
++}
++FavoritesController* FavoritesController::ForBrowser(
++    BrowserWindowInterface* browser) {
++  for (auto* controller : AllControllers()) {
++    if (controller->browser_.get() == browser) {
++      return controller;
++    }
++  }
++  return nullptr;
++}
++std::vector<Favorite> FavoritesController::entries() const {
++  std::vector<Favorite> result;
++  if (!browser_) {
++    return result;
++  }
++  for (const auto& value : browser_->GetProfile()->GetPrefs()->GetList(
++           brave_tabs::kSidecarFavorites)) {
++    const auto* dict = value.GetIfDict();
++    if (!dict) {
++      continue;
++    }
++    const auto* id = dict->FindString("id");
++    const auto* url = dict->FindString("url");
++    const auto* title = dict->FindString("title");
++    if (!id || !url || !ValidURL(GURL(*url)) ||
++        !base::Uuid::ParseLowercase(*id).is_valid()) {
++      continue;
++    }
++    if (std::ranges::any_of(result,
++                            [&](const Favorite& f) { return f.id == *id; })) {
++      continue;
++    }
++    const auto* last_url = dict->FindString("last_url");
++    result.push_back({*id, GURL(*url), last_url ? GURL(*last_url) : GURL(*url),
++                      base::UTF8ToUTF16(title ? *title : GURL(*url).host())});
++    if (result.size() == kMaxFavorites) {
++      break;
++    }
++  }
++  return result;
++}
++bool FavoritesController::CanAddActive() const {
++  if (!browser_) {
++    return false;
++  }
++  auto* active = browser_->GetTabStripModel()->GetActiveWebContents();
++  if (!active || !ValidURL(active->GetVisibleURL())) {
++    return false;
++  }
++  auto saved = entries();
++  return saved.size() < kMaxFavorites &&
++         !Contains(browser_->GetTabStripModel()->GetActiveTab()) &&
++         std::ranges::none_of(
++             saved,
++             [&](const Favorite& f) {
++               return f.url == active->GetVisibleURL();
++             });
++}
++bool FavoritesController::AddActive() {
++  if (!CanAddActive()) {
++    return false;
++  }
++  auto* model = browser_->GetTabStripModel();
++  auto* tab = model->GetActiveTab();
++  auto* contents = tab->GetContents();
++  std::string id = base::Uuid::GenerateRandomV4().AsLowercaseString();
++  base::DictValue entry;
++  entry.Set("id", id);
++  entry.Set("url", contents->GetVisibleURL().spec());
++  entry.Set("last_url", contents->GetVisibleURL().spec());
++  entry.Set("title", base::UTF16ToUTF8(contents->GetTitle().substr(0, 512)));
++  tabs_[id] = tab->GetHandle();
++  model->SetTabPinned(model->active_index(), true);
++  ScopedListPrefUpdate update(browser_->GetProfile()->GetPrefs(),
++                              brave_tabs::kSidecarFavorites);
++  update->Append(std::move(entry));
++  ScheduleRefresh();
++  return true;
++}
++bool FavoritesController::Remove(const std::string& id) {
++  if (!browser_) {
++    return false;
++  }
++  ScopedListPrefUpdate update(browser_->GetProfile()->GetPrefs(),
++                              brave_tabs::kSidecarFavorites);
++  const size_t removed = update->EraseIf([&](const base::Value& value) {
++    const auto* dict = value.GetIfDict();
++    const auto* entry_id = dict ? dict->FindString("id") : nullptr;
++    return entry_id && *entry_id == id;
++  });
++  tabs_.erase(id);
++  last_seen_.erase(id);
++  return removed != 0;
++}
++bool FavoritesController::Move(const std::string& id, size_t index) {
++  if (!browser_) {
++    return false;
++  }
++  ScopedListPrefUpdate update(browser_->GetProfile()->GetPrefs(),
++                              brave_tabs::kSidecarFavorites);
++  auto saved = entries();
++  if (index >= saved.size()) {
++    return false;
++  }
++  const auto target_id = saved[index].id;
++  size_t target_index = 0;
++  for (size_t i = 0; i < update->size(); ++i) {
++    const auto* dict = (*update)[i].GetIfDict();
++    if (dict && dict->FindString("id") &&
++        *dict->FindString("id") == target_id) {
++      target_index = i;
++    }
++  }
++  for (size_t i = 0; i < update->size(); ++i) {
++    auto* dict = (*update)[i].GetIfDict();
++    if (dict && dict->FindString("id") && *dict->FindString("id") == id) {
++      auto value = (*update)[i].Clone();
++      update->erase(update->begin() + i);
++      update->Insert(update->begin() + target_index, std::move(value));
++      return true;
++    }
++  }
++  return false;
++}
++tabs::TabInterface* FavoritesController::FindTab(const std::string& id) const {
++  if (!browser_) {
++    return nullptr;
++  }
++  auto it = tabs_.find(id);
++  if (it == tabs_.end()) {
++    return nullptr;
++  }
++  auto* tab = it->second.Get();
++  const auto* model = browser_->GetTabStripModel();
++  const int index = tab ? model->GetIndexOfTab(tab) : -1;
++  return index >= 0 && model->IsTabPinned(index) ? tab : nullptr;
++}
++bool FavoritesController::Contains(const tabs::TabInterface* tab) const {
++  if (!tab) {
++    return false;
++  }
++  for (const auto& [id, handle] : tabs_) {
++    if (handle.Get() == tab && FindTab(id)) {
++      return true;
++    }
++  }
++  return false;
++}
++void FavoritesController::Open(const std::string& id, bool reset) {
++  if (!browser_) {
++    return;
++  }
++  auto saved = entries();
++  auto it = std::ranges::find(saved, id, &Favorite::id);
++  if (it == saved.end()) {
++    return;
++  }
++  auto* model = browser_->GetTabStripModel();
++  if (auto* tab = FindTab(id)) {
++    model->ActivateTabAt(model->GetIndexOfTab(tab));
++    if (reset) {
++      content::NavigationController::LoadURLParams params(it->url);
++      params.transition_type = ui::PAGE_TRANSITION_AUTO_BOOKMARK;
++      tab->GetContents()->GetController().LoadURLWithParams(params);
++    }
++    tab->GetContents()->Focus();
++    return;
++  }
++  // Reuse a matching page in this window before opening another copy.
++  for (int i = 0; i < model->count(); ++i) {
++    if (model->GetWebContentsAt(i)->GetVisibleURL() == it->url &&
++        !Contains(model->GetTabAtIndex(i))) {
++      tabs_[id] = model->GetTabAtIndex(i)->GetHandle();
++      model->SetTabPinned(i, true);
++      model->ActivateTabAt(model->GetIndexOfTab(tabs_[id].Get()));
++      ScheduleRefresh();
++      return;
++    }
++  }
++  NavigateParams params(browser_.get(), it->url,
++                        ui::PAGE_TRANSITION_AUTO_BOOKMARK);
++  params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
++  Navigate(&params);
++  if (params.navigated_or_inserted_contents) {
++    const int index =
++        model->GetIndexOfWebContents(params.navigated_or_inserted_contents);
++    if (index >= 0) {
++      tabs_[id] = model->GetTabAtIndex(index)->GetHandle();
++      model->SetTabPinned(index, true);
++    }
++  }
++  ScheduleRefresh();
++}
++void FavoritesController::OnTabStripModelChanged(
++    TabStripModel*,
++    const TabStripModelChange&,
++    const TabStripSelectionChange&) {
++  ScheduleRefresh();
++}
++void FavoritesController::OnTabChangedAt(tabs::TabInterface*, TabChangeType) {
++  ScheduleRefresh();
++}
++void FavoritesController::ScheduleRefresh() {
++  if (refresh_pending_) {
++    return;
++  }
++  refresh_pending_ = true;
++  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
++      FROM_HERE, base::BindOnce(&FavoritesController::Refresh,
++                                weak_factory_.GetWeakPtr()));
++}
++void FavoritesController::Refresh() {
++  refresh_pending_ = false;
++  if (!browser_ || browser_->GetTabStripModel()->closing_all()) {
++    return;
++  }
++  auto saved = entries();
++  std::erase_if(tabs_, [&](const auto& pair) {
++    return !FindTab(pair.first) ||
++           std::ranges::none_of(
++               saved, [&](const Favorite& f) { return f.id == pair.first; });
++  });
++  std::erase_if(last_seen_,
++                [&](const auto& pair) { return !tabs_.contains(pair.first); });
++  auto* model = browser_->GetTabStripModel();
++  // Session restore recreates tab handles. Reassociate only pinned tabs with
++  // the saved home or last visited URL; never convert unrelated regular tabs.
++  for (const auto& entry : saved) {
++    if (FindTab(entry.id)) {
++      continue;
++    }
++    for (int i = 0; i < model->IndexOfFirstNonPinnedTab(); ++i) {
++      auto* tab = model->GetTabAtIndex(i);
++      const auto& url = tab->GetContents()->GetVisibleURL();
++      if (!Contains(tab) && (url == entry.url || url == entry.last_url)) {
++        tabs_[entry.id] = tab->GetHandle();
++        break;
++      }
++    }
++  }
++  {
++    auto* prefs = browser_->GetProfile()->GetPrefs();
++    auto updated = prefs->GetList(brave_tabs::kSidecarFavorites).Clone();
++    for (auto& value : updated) {
++      auto* dict = value.GetIfDict();
++      const auto* id = dict ? dict->FindString("id") : nullptr;
++      auto* tab = id ? FindTab(*id) : nullptr;
++      if (!tab) {
++        continue;
++      }
++      const auto& url = tab->GetContents()->GetLastCommittedURL();
++      if (ValidURL(url) && last_seen_[*id] != url) {
++        last_seen_[*id] = url;
++        dict->Set("last_url", url.spec());
++      }
++    }
++    if (updated != prefs->GetList(brave_tabs::kSidecarFavorites)) {
++      prefs->SetList(brave_tabs::kSidecarFavorites, std::move(updated));
++    }
++  }
++  if (changed_) {
++    changed_.Run();
++  }
++}
++bool IsFavoriteTab(const tabs::TabInterface* tab) {
++  return std::ranges::any_of(AllControllers(),
++                             [&](const auto* c) { return c->Contains(tab); });
++}
++}  // namespace sidecar
+diff --git a/browser/ui/sidecar_favorites.h b/browser/ui/sidecar_favorites.h
+new file mode 100644
+index 000000000..3cd090977
+--- /dev/null
++++ b/browser/ui/sidecar_favorites.h
+@@ -0,0 +1,60 @@
++// Copyright 2026 The Sidecar Authors. MPL-2.0.
++#ifndef BRAVE_BROWSER_UI_SIDECAR_FAVORITES_H_
++#define BRAVE_BROWSER_UI_SIDECAR_FAVORITES_H_
++
++#include <map>
++#include <string>
++#include <vector>
++
++#include "base/functional/callback.h"
++#include "base/memory/weak_ptr.h"
++#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
++#include "components/prefs/pref_change_registrar.h"
++#include "components/tabs/public/tab_interface.h"
++#include "url/gurl.h"
++
++class BrowserWindowInterface;
++namespace sidecar {
++inline constexpr size_t kMaxFavorites = 12;
++struct Favorite {
++  std::string id;
++  GURL url;
++  GURL last_url;
++  std::u16string title;
++};
++
++// One controller per window. Saved entries belong to the profile; live tab
++// handles belong to the window and survive WebContents discards.
++class FavoritesController : public TabStripModelObserver {
++ public:
++  explicit FavoritesController(BrowserWindowInterface* browser,
++                               base::RepeatingClosure changed);
++  ~FavoritesController() override;
++  static FavoritesController* ForBrowser(BrowserWindowInterface* browser);
++  std::vector<Favorite> entries() const;
++  bool CanAddActive() const;
++  bool AddActive();
++  bool Remove(const std::string& id);
++  bool Move(const std::string& id, size_t index);
++  void Open(const std::string& id, bool reset = false);
++  tabs::TabInterface* FindTab(const std::string& id) const;
++  bool Contains(const tabs::TabInterface* tab) const;
++  void OnTabStripModelChanged(TabStripModel*,
++                              const TabStripModelChange&,
++                              const TabStripSelectionChange&) override;
++  void OnTabChangedAt(tabs::TabInterface*, TabChangeType) override;
++
++ private:
++  void ScheduleRefresh();
++  void Refresh();
++  base::WeakPtr<BrowserWindowInterface> browser_;
++  base::RepeatingClosure changed_;
++  PrefChangeRegistrar prefs_observer_;
++  std::map<std::string, tabs::TabHandle> tabs_;
++  std::map<std::string, GURL> last_seen_;
++  bool refresh_pending_ = false;
++  base::WeakPtrFactory<FavoritesController> weak_factory_{this};
++};
++bool IsFavoriteTab(const tabs::TabInterface* tab);
++}  // namespace sidecar
++#endif
 diff --git a/browser/ui/views/frame/brave_browser_view.cc b/browser/ui/views/frame/brave_browser_view.cc
 index 5c4003575..3556f048d 100644
 --- a/browser/ui/views/frame/brave_browser_view.cc
@@ -785,53 +1503,530 @@ index 5c4003575..3556f048d 100644
    if (!location_bar) {
      return true;
 diff --git a/browser/ui/views/frame/vertical_tabs/BUILD.gn b/browser/ui/views/frame/vertical_tabs/BUILD.gn
-index 7de8ab7e5..faac2edf4 100644
+index 7de8ab7e5..741387dac 100644
 --- a/browser/ui/views/frame/vertical_tabs/BUILD.gn
 +++ b/browser/ui/views/frame/vertical_tabs/BUILD.gn
-@@ -31,6 +31,8 @@ source_set("vertical_tabs") {
+@@ -8,6 +8,8 @@ import("//build/config/ui.gni")
+ 
+ source_set("vertical_tabs") {
+   sources = [
++    "sidecar_favorites_view.cc",
++    "sidecar_favorites_view.h",
+     "vertical_tab_strip_container_view.cc",
+     "vertical_tab_strip_container_view.h",
+     "vertical_tab_strip_region_view.cc",
+@@ -22,14 +24,18 @@ source_set("vertical_tabs") {
+ 
+   deps = [
+     "//base",
++    "//brave/app:command_ids",
+     "//brave/browser/ui:brave_tab_prefs",
++    "//brave/browser/ui:sidecar_favorites",
+     "//brave/browser/ui/tabs:tabs_public",
+     "//brave/browser/ui/views/frame",
+     "//brave/components/constants",
+     "//brave/components/vector_icons",
+     "//chrome/app:command_ids",
++    "//chrome/browser/favicon",
      "//chrome/browser/profiles",
      "//chrome/browser/themes",
-     "//chrome/browser/ui:ui_features",
 +    "//chrome/browser/ui:browser_commands",
-+    "//content/public/browser",
+     "//chrome/browser/ui:ui_features",
      "//chrome/browser/ui/color:color_headers",
      "//chrome/browser/ui/color:mixers",
-     "//chrome/browser/ui/exclusive_access",
-@@ -40,6 +42,7 @@ source_set("vertical_tabs") {
+@@ -39,7 +45,11 @@ source_set("vertical_tabs") {
+     "//chrome/browser/ui/views:layout_provider",
      "//chrome/browser/ui/views/toolbar",
      "//chrome/common:constants",
++    "//components/favicon/content",
      "//components/prefs",
 +    "//components/vector_icons",
++    "//content/public/browser",
++    "//ui/menus",
      "//ui/views",
    ]
  }
-diff --git a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
-index c5887df11..71fc095a9 100644
---- a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
-+++ b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
-@@ -5,6 +5,21 @@
- 
- #include "brave/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h"
- 
+diff --git a/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.cc b/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.cc
+new file mode 100644
+index 000000000..7dd115cc2
+--- /dev/null
++++ b/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.cc
+@@ -0,0 +1,386 @@
++// Copyright 2026 The Sidecar Authors. MPL-2.0.
++#include "brave/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h"
++
++#include <algorithm>
++#include <map>
++
++#include "base/functional/bind.h"
++#include "base/no_destructor.h"
++#include "base/pickle.h"
 +#include "base/strings/utf_string_conversions.h"
-+#include "brave/app/brave_command_ids.h"
-+#include "components/vector_icons/vector_icons.h"
-+#include "ui/views/controls/button/image_button.h"
-+#include "chrome/app/chrome_command_ids.h"
-+#include "chrome/browser/ui/browser_commands.h"
++#include "base/task/cancelable_task_tracker.h"
++#include "brave/browser/ui/sidecar_favorites.h"
++#include "chrome/browser/favicon/favicon_service_factory.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 +#include "chrome/browser/ui/tabs/tab_strip_model.h"
-+#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
-+#include "content/public/browser/navigation_controller.h"
++#include "components/favicon/content/content_favicon_driver.h"
++#include "components/favicon/core/favicon_service.h"
++#include "components/vector_icons/vector_icons.h"
 +#include "content/public/browser/web_contents.h"
++#include "ui/base/clipboard/clipboard_format_type.h"
++#include "ui/base/dragdrop/drag_drop_types.h"
++#include "ui/base/dragdrop/drop_target_event.h"
++#include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
++#include "ui/base/dragdrop/os_exchange_data.h"
++#include "ui/base/metadata/metadata_impl_macros.h"
++#include "ui/base/models/image_model.h"
 +#include "ui/color/color_id.h"
++#include "ui/compositor/layer_tree_owner.h"
++#include "ui/menus/simple_menu_model.h"
 +#include "ui/views/background.h"
 +#include "ui/views/border.h"
++#include "ui/views/context_menu_controller.h"
++#include "ui/views/controls/button/image_button.h"
 +#include "ui/views/controls/button/label_button.h"
++#include "ui/views/controls/label.h"
++#include "ui/views/controls/menu/menu_runner.h"
++#include "ui/views/controls/scroll_view.h"
++#include "ui/views/drag_controller.h"
++#include "ui/views/view.h"
++#include "ui/views/view_utils.h"
 +
- #include <algorithm>
- #include <memory>
- #include <optional>
-@@ -87,6 +102,104 @@ namespace {
++namespace sidecar {
++namespace {
++const ui::ClipboardFormatType& FavoriteFormat() {
++  static const base::NoDestructor<ui::ClipboardFormatType> type(
++      ui::ClipboardFormatType::CustomPlatformType("org.sidecar.favorite"));
++  return *type;
++}
++class FavoriteButton : public views::ImageButton {
++  METADATA_HEADER(FavoriteButton, views::ImageButton)
++ public:
++  explicit FavoriteButton(PressedCallback callback)
++      : views::ImageButton(std::move(callback)) {
++    SetImageHorizontalAlignment(ALIGN_CENTER);
++    SetImageVerticalAlignment(ALIGN_MIDDLE);
++    SetFocusBehavior(FocusBehavior::ALWAYS);
++    UpdateColor();
++  }
++  void SetActive(bool active) {
++    active_ = active;
++    UpdateColor();
++  }
++  void SetDropTarget(bool target) {
++    drop_target_ = target;
++    UpdateColor();
++  }
++  void StateChanged(ButtonState previous) override {
++    views::ImageButton::StateChanged(previous);
++    UpdateColor();
++  }
++
++ private:
++  void UpdateColor() {
++    SetBackground(views::CreateRoundedRectBackground(
++        active_ || drop_target_       ? ui::kColorSysPrimaryContainer
++        : GetState() == STATE_HOVERED ? ui::kColorSysStateHoverOnSubtle
++                                      : ui::kColorSubtleEmphasisBackground,
++        10));
++    SetBorder(views::CreateRoundedRectBorder(
++        1, 10,
++        active_ || drop_target_ ? ui::kColorSysPrimary
++                                : ui::kColorSysStateHoverOnSubtle));
++  }
++  bool active_ = false;
++  bool drop_target_ = false;
++};
++BEGIN_METADATA(FavoriteButton)
++END_METADATA
++
++class FavoritesView : public views::View,
++                      public views::ContextMenuController,
++                      public ui::SimpleMenuModel::Delegate,
++                      public views::DragController {
++  METADATA_HEADER(FavoritesView, views::View)
++ public:
++  FavoritesView(BrowserWindowInterface* browser, base::RepeatingClosure changed)
++      : browser_(browser->GetWeakPtr()),
++        changed_(std::move(changed)),
++        controller_(browser,
++                    base::BindRepeating(&FavoritesView::Refresh,
++                                        base::Unretained(this))) {
++    label_ = AddChildView(std::make_unique<views::Label>(u"Favorites"));
++    label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++    label_->SetEnabledColor(ui::kColorSecondaryForeground);
++    label_->SetFontList(label_->font_list().DeriveWithSizeDelta(-1));
++    add_ = AddChildView(std::make_unique<views::LabelButton>(
++        base::BindRepeating(
++            [](FavoritesController* controller) { controller->AddActive(); },
++            base::Unretained(&controller_)),
++        u"+"));
++    add_->SetAccessibleName(u"Add current tab to Favorites");
++    add_->SetTooltipText(u"Add current tab to Favorites (up to 12)");
++    scroll_ = AddChildView(std::make_unique<views::ScrollView>());
++    scroll_->SetBackgroundColor(std::nullopt);
++    grid_ = scroll_->SetContents(std::make_unique<views::View>());
++    add_->SetEnabled(false);
++  }
++  int Height(int width) const {
++    const int rows = (buttons_.size() + Columns(width) - 1) / Columns(width);
++    return HeaderHeight(width) + std::min(168, rows * 54) + (rows ? 8 : 0);
++  }
++  bool GetDropFormats(int* formats,
++                      std::set<ui::ClipboardFormatType>* types) override {
++    *formats = ui::OSExchangeData::PICKLED_DATA;
++    types->insert(FavoriteFormat());
++    return true;
++  }
++  bool AreDropTypesRequired() override { return true; }
++  bool CanDrop(const ui::OSExchangeData& data) override {
++    return !ReadDrag(data).empty();
++  }
++  int OnDragUpdated(const ui::DropTargetEvent& event) override {
++    drop_index_ = IndexAt(event.location());
++    for (size_t i = 0; i < buttons_.size(); ++i) {
++      buttons_[i]->SetDropTarget(i == drop_index_);
++    }
++    return ui::DragDropTypes::DRAG_MOVE;
++  }
++  void OnDragExited() override {
++    for (auto& button : buttons_) {
++      button->SetDropTarget(false);
++    }
++  }
++  DropCallback GetDropCallback(const ui::DropTargetEvent& event) override {
++    std::string id = ReadDrag(event.data());
++    const size_t index = IndexAt(event.location());
++    OnDragExited();
++    return base::BindOnce(
++        [](base::WeakPtr<FavoritesView> view, std::string id, size_t index,
++           const ui::DropTargetEvent&, ui::mojom::DragOperation& operation,
++           std::unique_ptr<ui::LayerTreeOwner>) {
++          if (view && view->controller_.Move(id, index)) {
++            operation = ui::mojom::DragOperation::kMove;
++          }
++        },
++        weak_factory_.GetWeakPtr(), id, index);
++  }
++  void WriteDragDataForView(views::View* sender,
++                            const gfx::Point& press_point,
++                            ui::OSExchangeData* data) override {
++    base::Pickle pickle;
++    pickle.WriteString(IdFor(sender));
++    data->SetPickledData(FavoriteFormat(), pickle);
++    // Cocoa requires a non-empty image to start a native dragging session.
++    auto* button = views::AsViewClass<FavoriteButton>(sender);
++    data->provider().SetDragImage(button->GetImage(views::Button::STATE_NORMAL),
++                                  press_point.OffsetFromOrigin());
++  }
++  int GetDragOperationsForView(views::View*, const gfx::Point&) override {
++    return ui::DragDropTypes::DRAG_MOVE;
++  }
++  bool CanStartDragForView(views::View*,
++                           const gfx::Point& press,
++                           const gfx::Point& current) override {
++    return ExceededDragThreshold(current - press);
++  }
++  void ExecuteCommand(int command, int) override {
++    const auto id = menu_id_;
++    if (command == 1) {
++      controller_.Open(id, true);
++    }
++    if (command == 2) {
++      controller_.Remove(id);
++    }
++    auto saved = controller_.entries();
++    auto it = std::ranges::find(saved, id, &Favorite::id);
++    if (it == saved.end()) {
++      return;
++    }
++    const size_t index = it - saved.begin();
++    if (command == 3 && index > 0) {
++      controller_.Move(id, index - 1);
++    }
++    if (command == 4 && index + 1 < saved.size()) {
++      controller_.Move(id, index + 1);
++    }
++  }
++  bool IsCommandIdEnabled(int command) const override {
++    auto saved = controller_.entries();
++    auto it = std::ranges::find(saved, menu_id_, &Favorite::id);
++    if (it == saved.end()) {
++      return false;
++    }
++    return (command != 3 || it != saved.begin()) &&
++           (command != 4 || it + 1 != saved.end());
++  }
++
++ private:
++  static int Columns(int width) { return std::clamp((width - 16) / 54, 1, 4); }
++  static int HeaderHeight(int width) { return width >= 100 ? 30 : 0; }
++  void Layout(PassKey) override {
++    const int header = HeaderHeight(width());
++    label_->SetVisible(header != 0);
++    add_->SetVisible(header != 0);
++    label_->SetBounds(12, 0, std::max(0, width() - 48), header);
++    add_->SetBounds(std::max(0, width() - 36), 0, 28, header);
++    scroll_->SetBounds(6, header, std::max(0, width() - 12),
++                       std::max(0, height() - header - 8));
++    const int cols = Columns(width());
++    const int tile_width = std::max(24, (width() - 12 - (cols - 1) * 6) / cols);
++    const int rows = (buttons_.size() + cols - 1) / cols;
++    grid_->SetPreferredSize(gfx::Size(std::max(0, width() - 12), rows * 54));
++    grid_->SetSize(gfx::Size(std::max(0, width() - 12), rows * 54));
++    for (size_t i = 0; i < buttons_.size(); ++i) {
++      buttons_[i]->SetBounds((i % cols) * (tile_width + 6), (i / cols) * 54,
++                             tile_width, 48);
++    }
++  }
++  void Refresh() {
++    auto saved = controller_.entries();
++    std::vector<std::string> ids;
++    for (const auto& entry : saved) {
++      ids.push_back(entry.id);
++    }
++    if (ids != ids_) {
++      buttons_.clear();
++      grid_->RemoveAllChildViews();
++      ids_ = ids;
++      for (const auto& entry : saved) {
++        auto* button = grid_->AddChildView(
++            std::make_unique<FavoriteButton>(base::BindRepeating(
++                [](FavoritesController* c, std::string id) { c->Open(id); },
++                base::Unretained(&controller_), entry.id)));
++        button->set_context_menu_controller(this);
++        button->set_drag_controller(this);
++        buttons_.push_back(button);
++      }
++    }
++    for (size_t i = 0; i < saved.size(); ++i) {
++      const auto& entry = saved[i];
++      auto* tab = controller_.FindTab(entry.id);
++      auto* contents = tab ? tab->GetContents() : nullptr;
++      const auto title = entry.title.empty()
++                             ? base::UTF8ToUTF16(entry.url.host())
++                             : entry.title;
++      auto* button = buttons_[i].get();
++      button->SetAccessibleName(u"Favorite: " + title);
++      button->SetTooltipText(title + u"\n" +
++                             base::UTF8ToUTF16(entry.url.host()));
++      ui::ImageModel icon = ui::ImageModel::FromVectorIcon(
++          vector_icons::kGlobeIcon, ui::kColorPrimaryForeground, 20);
++      if (auto* driver =
++              contents
++                  ? favicon::ContentFaviconDriver::FromWebContents(contents)
++                  : nullptr;
++          driver && !driver->GetFavicon().IsEmpty()) {
++        icon =
++            ui::ImageModel::FromImageSkia(driver->GetFavicon().AsImageSkia());
++        icons_[entry.id] = icon;
++      } else if (icons_.contains(entry.id)) {
++        icon = icons_[entry.id];
++      }
++      if (!icons_.contains(entry.id) && !requested_icons_.contains(entry.id) &&
++          browser_) {
++        requested_icons_.insert(entry.id);
++        if (auto* service = FaviconServiceFactory::GetForProfile(
++                browser_->GetProfile(), ServiceAccessType::IMPLICIT_ACCESS)) {
++          service->GetFaviconImageForPageURL(
++              entry.url,
++              base::BindOnce(
++                  [](base::WeakPtr<FavoritesView> view, std::string id,
++                     const favicon_base::FaviconImageResult& result) {
++                    if (!view || result.image.IsEmpty() ||
++                        std::ranges::find(view->ids_, id) == view->ids_.end()) {
++                      return;
++                    }
++                    view->icons_[id] = ui::ImageModel::FromImageSkia(
++                        result.image.AsImageSkia());
++                    view->Refresh();
++                  },
++                  weak_factory_.GetWeakPtr(), entry.id),
++              &icon_tasks_);
++        }
++      }
++      button->SetImageModel(views::Button::STATE_NORMAL, icon);
++      button->SetActive(browser_ && tab &&
++                        browser_->GetTabStripModel()->GetActiveTab() == tab);
++    }
++    std::erase_if(icons_, [&](const auto& pair) {
++      return std::ranges::find(ids_, pair.first) == ids_.end();
++    });
++    add_->SetEnabled(controller_.CanAddActive());
++    PreferredSizeChanged();
++    InvalidateLayout();
++    if (changed_) {
++      changed_.Run();
++    }
++  }
++  std::string IdFor(views::View* source) const {
++    for (size_t i = 0; i < buttons_.size(); ++i) {
++      if (buttons_[i] == source) {
++        return ids_[i];
++      }
++    }
++    return {};
++  }
++  std::string ReadDrag(const ui::OSExchangeData& data) const {
++    if (data.IsRendererTainted()) {
++      return {};
++    }
++    auto pickle = data.GetPickledData(FavoriteFormat());
++    if (!pickle) {
++      return {};
++    }
++    std::string id;
++    if (!base::PickleIterator(*pickle).ReadString(&id) ||
++        std::ranges::find(ids_, id) == ids_.end()) {
++      return {};
++    }
++    return id;
++  }
++  size_t IndexAt(gfx::Point point) const {
++    views::View::ConvertPointToTarget(this, grid_, &point);
++    const int cols = Columns(width());
++    const int tile_width = std::max(24, (width() - 12 - (cols - 1) * 6) / cols);
++    return std::clamp(std::max(0, point.y()) / 54 * cols +
++                          std::clamp(point.x() / (tile_width + 6), 0, cols - 1),
++                      0, std::max(0, static_cast<int>(ids_.size()) - 1));
++  }
++  void ShowContextMenuForViewImpl(
++      views::View* source,
++      const gfx::Point& point,
++      ui::mojom::MenuSourceType source_type) override {
++    menu_id_ = IdFor(source);
++    menu_runner_.reset();
++    menu_model_ = std::make_unique<ui::SimpleMenuModel>(this);
++    menu_model_->AddItem(1, u"Reset to saved URL");
++    menu_model_->AddItem(2, u"Move to pinned tabs");
++    menu_model_->AddSeparator(ui::NORMAL_SEPARATOR);
++    menu_model_->AddItem(3, u"Move earlier");
++    menu_model_->AddItem(4, u"Move later");
++    menu_runner_ = std::make_unique<views::MenuRunner>(
++        menu_model_.get(), views::MenuRunner::CONTEXT_MENU);
++    menu_runner_->RunMenuAt(GetWidget(), nullptr, gfx::Rect(point, gfx::Size()),
++                            views::MenuAnchorPosition::kTopLeft, source_type);
++  }
++  base::WeakPtr<BrowserWindowInterface> browser_;
++  base::RepeatingClosure changed_;
++  FavoritesController controller_;
++  raw_ptr<views::Label> label_ = nullptr;
++  raw_ptr<views::LabelButton> add_ = nullptr;
++  raw_ptr<views::ScrollView> scroll_ = nullptr;
++  raw_ptr<views::View> grid_ = nullptr;
++  std::vector<raw_ptr<FavoriteButton>> buttons_;
++  std::vector<std::string> ids_;
++  std::map<std::string, ui::ImageModel> icons_;
++  std::set<std::string> requested_icons_;
++  base::CancelableTaskTracker icon_tasks_;
++  size_t drop_index_ = 0;
++  std::string menu_id_;
++  std::unique_ptr<ui::SimpleMenuModel> menu_model_;
++  std::unique_ptr<views::MenuRunner> menu_runner_;
++  base::WeakPtrFactory<FavoritesView> weak_factory_{this};
++};
++BEGIN_METADATA(FavoritesView)
++END_METADATA
++}  // namespace
++std::unique_ptr<views::View> CreateFavoritesView(
++    BrowserWindowInterface* browser,
++    base::RepeatingClosure changed) {
++  return std::make_unique<FavoritesView>(browser, std::move(changed));
++}
++int FavoritesHeightForWidth(views::View* view, int width) {
++  return views::AsViewClass<FavoritesView>(view)->Height(width);
++}
++}  // namespace sidecar
+diff --git a/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h b/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h
+new file mode 100644
+index 000000000..15a8fad25
+--- /dev/null
++++ b/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h
+@@ -0,0 +1,17 @@
++// Copyright 2026 The Sidecar Authors. MPL-2.0.
++#ifndef BRAVE_BROWSER_UI_VIEWS_FRAME_VERTICAL_TABS_SIDECAR_FAVORITES_VIEW_H_
++#define BRAVE_BROWSER_UI_VIEWS_FRAME_VERTICAL_TABS_SIDECAR_FAVORITES_VIEW_H_
++#include <memory>
++
++#include "base/functional/callback_forward.h"
++namespace views {
++class View;
++}
++class BrowserWindowInterface;
++namespace sidecar {
++std::unique_ptr<views::View> CreateFavoritesView(
++    BrowserWindowInterface* browser,
++    base::RepeatingClosure changed);
++int FavoritesHeightForWidth(views::View* view, int width);
++}  // namespace sidecar
++#endif
+diff --git a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
+index c5887df11..1858c92c2 100644
+--- a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
++++ b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.cc
+@@ -18,6 +18,8 @@
+ #include "base/feature_list.h"
+ #include "base/functional/bind.h"
+ #include "base/strings/string_split.h"
++#include "base/strings/utf_string_conversions.h"
++#include "brave/app/brave_command_ids.h"
+ #include "brave/app/vector_icons/vector_icons.h"
+ #include "brave/browser/ui/color/brave_color_id.h"
+ #include "brave/browser/ui/focus_mode/focus_mode_controller.h"
+@@ -28,20 +30,25 @@
+ #include "brave/browser/ui/views/frame/brave_browser_view.h"
+ #include "brave/browser/ui/views/frame/brave_non_client_hit_test_helper.h"
+ #include "brave/browser/ui/views/frame/tab_strip_placement_coordinator.h"
++#include "brave/browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h"
+ #include "brave/browser/ui/views/tabs/brave_new_tab_button.h"
+ #include "brave/browser/ui/views/tabs/brave_tab_container.h"
+ #include "brave/browser/ui/views/tabs/brave_tab_strip_layout_helper.h"
+ #include "brave/components/constants/pref_names.h"
+ #include "brave/components/vector_icons/vector_icons.h"
++#include "chrome/app/chrome_command_ids.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/themes/theme_properties.h"
+ #include "chrome/browser/ui/browser.h"
++#include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+ #include "chrome/browser/ui/color/chrome_color_id.h"
+ #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
+ #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
+ #include "chrome/browser/ui/frame/window_frame_util.h"
+ #include "chrome/browser/ui/tabs/features.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
+ #include "chrome/browser/ui/tabs/tab_style.h"
+ #include "chrome/browser/ui/ui_features.h"
+ #include "chrome/browser/ui/views/chrome_layout_provider.h"
+@@ -51,10 +58,14 @@
+ #include "chrome/common/pref_names.h"
+ #include "chrome/grit/generated_resources.h"
+ #include "components/prefs/pref_service.h"
++#include "components/vector_icons/vector_icons.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/web_contents.h"
+ #include "ui/base/cursor/cursor.h"
+ #include "ui/base/hit_test.h"
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/metadata/metadata_impl_macros.h"
++#include "ui/color/color_id.h"
+ #include "ui/compositor/compositor.h"
+ #include "ui/compositor/layer.h"
+ #include "ui/display/screen.h"
+@@ -64,6 +75,10 @@
+ #include "ui/gfx/scoped_canvas.h"
+ #include "ui/views/accessibility/accessibility_paint_checks.h"
+ #include "ui/views/animation/ink_drop.h"
++#include "ui/views/background.h"
++#include "ui/views/border.h"
++#include "ui/views/controls/button/image_button.h"
++#include "ui/views/controls/button/label_button.h"
+ #include "ui/views/controls/highlight_path_generator.h"
+ #include "ui/views/controls/image_view.h"
+ #include "ui/views/controls/resize_area.h"
+@@ -87,6 +102,123 @@ namespace {
  constexpr int kSeparatorHeight = 1;
  constexpr int kBorderThickness = 1;
  
@@ -845,14 +2040,14 @@ index c5887df11..71fc095a9 100644
 +    auto* row = AddChildView(std::make_unique<views::View>());
 +    auto* navigation = row->SetLayoutManager(std::make_unique<views::BoxLayout>(
 +        views::BoxLayout::Orientation::kHorizontal, gfx::Insets(), 2));
-+    AddIcon(row, kLeoBrowserSidebarRightIcon, u"Collapse sidebar",
-+            IDC_TOGGLE_VERTICAL_TABS_EXPANDED);
-+    auto* spacer = row->AddChildView(std::make_unique<views::View>());
-+    navigation->SetFlexForView(spacer, 1);
++    toggle_ = AddIcon(row, kLeoBrowserSidebarRightIcon, u"Collapse sidebar",
++                      IDC_TOGGLE_VERTICAL_TABS_EXPANDED);
++    spacer_ = row->AddChildView(std::make_unique<views::View>());
++    navigation->SetFlexForView(spacer_, 1);
 +    back_ = AddIcon(row, vector_icons::kArrowBackIcon, u"Back", IDC_BACK);
 +    forward_ =
 +        AddIcon(row, vector_icons::kArrowForwardIcon, u"Forward", IDC_FORWARD);
-+    AddIcon(row, kLeoReloadIcon, u"Reload", IDC_RELOAD);
++    reload_ = AddIcon(row, kLeoReloadIcon, u"Reload", IDC_RELOAD);
 +    address_ = AddChildView(std::make_unique<views::LabelButton>(
 +        Command(IDC_FOCUS_LOCATION), u"Search or enter URL"));
 +    address_->SetImageModel(
@@ -868,6 +2063,21 @@ index c5887df11..71fc095a9 100644
 +        ui::kColorSubtleEmphasisBackground, 10));
 +    browser->GetTabStripModel()->AddObserver(this);
 +    Update();
++  }
++
++  void SetExpanded(bool expanded) {
++    if (expanded_ == expanded) {
++      return;
++    }
++    expanded_ = expanded;
++    spacer_->SetVisible(expanded);
++    back_->SetVisible(expanded);
++    forward_->SetVisible(expanded);
++    reload_->SetVisible(expanded);
++    address_->SetVisible(expanded);
++    const auto* label = expanded ? u"Collapse sidebar" : u"Expand sidebar";
++    toggle_->SetTooltipText(label);
++    toggle_->SetAccessibleName(label);
 +  }
 +
 +  void OnTabStripModelChanged(TabStripModel*,
@@ -926,6 +2136,10 @@ index c5887df11..71fc095a9 100644
 +                                           u" — Site information (⌘L)");
 +  }
 +  base::WeakPtr<BrowserWindowInterface> browser_;
++  bool expanded_ = true;
++  raw_ptr<views::View> spacer_ = nullptr;
++  raw_ptr<views::ImageButton> toggle_ = nullptr;
++  raw_ptr<views::ImageButton> reload_ = nullptr;
 +  raw_ptr<views::LabelButton> address_ = nullptr;
 +  raw_ptr<views::ImageButton> back_ = nullptr;
 +  raw_ptr<views::ImageButton> forward_ = nullptr;
@@ -936,27 +2150,40 @@ index c5887df11..71fc095a9 100644
  class ShortcutBox : public views::View {
    METADATA_HEADER(ShortcutBox, views::View)
   public:
-@@ -310,6 +423,7 @@ BraveVerticalTabStripRegionView::BraveVerticalTabStripRegionView(
+@@ -310,6 +442,18 @@ BraveVerticalTabStripRegionView::BraveVerticalTabStripRegionView(
    // The default state is kExpanded, so reset animation state to 1.0.
    width_animation_.Reset(1.0);
  
-+  sidecar_header_ = AddChildView(std::make_unique<SidecarSidebarHeader>(browser_));
++  sidecar_header_ =
++      AddChildView(std::make_unique<SidecarSidebarHeader>(browser_));
++  sidecar_favorites_ = AddChildView(sidecar::CreateFavoritesView(
++      browser_, base::BindRepeating(
++                    [](BraveVerticalTabStripRegionView* region) {
++                      region->InvalidateLayout();
++                      if (auto* strip = region->tab_strip();
++                          strip && strip->tab_container_) {
++                        strip->tab_container_->CompleteAnimationAndLayout();
++                      }
++                    },
++                    base::Unretained(this))));
    region_view_container_ = AddChildView(std::make_unique<views::View>());
    region_view_container_->SetLayoutManager(
        std::make_unique<views::FillLayout>());
-@@ -323,8 +437,9 @@ BraveVerticalTabStripRegionView::BraveVerticalTabStripRegionView(
+@@ -323,8 +467,11 @@ BraveVerticalTabStripRegionView::BraveVerticalTabStripRegionView(
    separator_->SetBackground(
        views::CreateSolidBackground(kColorBraveVerticalTabSeparator));
    new_tab_button_ = AddChildView(std::make_unique<VerticalTabNewTabButton>(
 -      base::BindRepeating(&TabStrip::NewTabButtonPressed,
 -                          base::Unretained(original_region_view_->tab_strip_)),
-+      base::BindRepeating([](BrowserWindowInterface* browser) {
-+        chrome::ExecuteCommand(browser, IDC_NEW_TAB);
-+      }, browser_),
++      base::BindRepeating(
++          [](BrowserWindowInterface* browser) {
++            chrome::ExecuteCommand(browser, IDC_NEW_TAB);
++          },
++          browser_),
        GetShortcutTextForNewTabButton(browser_view), browser_));
  
    resize_area_ = AddChildView(std::make_unique<ResettableResizeArea>(this));
-@@ -701,34 +816,26 @@ void BraveVerticalTabStripRegionView::Layout(PassKey) {
+@@ -701,34 +848,36 @@ void BraveVerticalTabStripRegionView::Layout(PassKey) {
    }
  
    const auto contents_bounds = GetContentsBounds();
@@ -969,23 +2196,7 @@ index c5887df11..71fc095a9 100644
 -  // Using tab_container_'s preferred height because tab_strip's preferred
 -  // height could be 0 in tests.
 -  const int contents_view_preferred_height =
-+  const bool expanded = state_ != State::kCollapsed;
-+  const int header_height = expanded ? 84 : 0;
-+  sidecar_header_->SetVisible(expanded);
-+  sidecar_header_->SetBounds(contents_bounds.x(), contents_bounds.y(),
-+                             contents_bounds.width(), header_height);
-+  gfx::Rect new_tab_bounds(contents_bounds.x(),
-+                           contents_bounds.bottom() - tabs::kVerticalTabHeight - 8,
-+                           contents_bounds.width(), tabs::kVerticalTabHeight);
-+  new_tab_bounds.Inset(gfx::Insets::VH(0, tabs::kMarginForVerticalTabContainers));
-+  new_tab_button_->SetBoundsRect(new_tab_bounds);
-+  const int separator_y = new_tab_bounds.y() - tabs::kVerticalTabsSpacing;
-+  separator_->SetBounds(new_tab_bounds.x(), separator_y, new_tab_bounds.width(),
-+                         kSeparatorHeight);
-+  const int tabs_y = contents_bounds.y() + header_height + tabs::kVerticalTabsSpacing;
-+  const int max_height = std::max(0, separator_y - tabs_y - tabs::kVerticalTabsSpacing);
-+  const int preferred_height =
-       tab_strip()->tab_container_->GetPreferredSize().height();
+-      tab_strip()->tab_container_->GetPreferredSize().height();
 -
 -  region_view_container_->SetBoundsRect(gfx::Rect(
 -      contents_bounds.origin(),
@@ -997,20 +2208,46 @@ index c5887df11..71fc095a9 100644
 -      region_view_container_->bounds().bottom_left(),
 -      gfx::Size(contents_bounds.width(), kSeparatorHeight));
 -  separator_bounds.Inset(
--      gfx::Insets::VH(0, tabs::kMarginForVerticalTabContainers));
++  const bool expanded = state_ != State::kCollapsed;
++  const int header_height = expanded ? 84 : 40;
++  views::AsViewClass<SidecarSidebarHeader>(sidecar_header_)
++      ->SetExpanded(expanded);
++  sidecar_header_->SetBounds(contents_bounds.x(), contents_bounds.y(),
++                             contents_bounds.width(), header_height);
++  gfx::Rect new_tab_bounds(
++      contents_bounds.x(),
++      contents_bounds.bottom() - tabs::kVerticalTabHeight - 8,
++      contents_bounds.width(), tabs::kVerticalTabHeight);
++  new_tab_bounds.Inset(
+       gfx::Insets::VH(0, tabs::kMarginForVerticalTabContainers));
 -  separator_->SetBoundsRect(separator_bounds);
 -  gfx::Rect new_tab_button_bounds(
 -      separator_->bounds().bottom_left(),
 -      gfx::Size(separator_bounds.width(), kNewTabButtonHeight));
 -  new_tab_button_bounds.Offset(0, tabs::kMarginForVerticalTabContainers);
 -  new_tab_button_->SetBoundsRect(new_tab_button_bounds);
++  new_tab_button_->SetBoundsRect(new_tab_bounds);
++  const int separator_y = new_tab_bounds.y() - tabs::kVerticalTabsSpacing;
++  separator_->SetBounds(new_tab_bounds.x(), separator_y, new_tab_bounds.width(),
++                        kSeparatorHeight);
++  const int favorites_height = sidecar::FavoritesHeightForWidth(
++      sidecar_favorites_, contents_bounds.width());
++  sidecar_favorites_->SetBounds(contents_bounds.x(),
++                                contents_bounds.y() + header_height,
++                                contents_bounds.width(), favorites_height);
++  const int tabs_y = contents_bounds.y() + header_height + favorites_height +
++                     tabs::kVerticalTabsSpacing;
++  const int max_height =
++      std::max(0, separator_y - tabs_y - tabs::kVerticalTabsSpacing);
++  const int preferred_height =
++      tab_strip()->tab_container_->GetPreferredSize().height();
 +  region_view_container_->SetBounds(contents_bounds.x(), tabs_y,
 +                                    contents_bounds.width(),
 +                                    std::min(max_height, preferred_height));
  
    // Put resize area, overlapped with contents.
    if (vertical_tab_on_right_.GetPrefName().empty()) {
-@@ -984,9 +1091,9 @@ void BraveVerticalTabStripRegionView::UpdateNewTabButtonVisibility() {
+@@ -984,9 +1133,13 @@ void BraveVerticalTabStripRegionView::UpdateNewTabButtonVisibility() {
  int BraveVerticalTabStripRegionView::GetTabStripViewportMaxHeight() const {
    // Don't depend on |contents_view_|'s current height. It could be bigger than
    // the actual viewport height.
@@ -1018,12 +2255,16 @@ index c5887df11..71fc095a9 100644
 -         (separator_->height() + tabs::kMarginForVerticalTabContainers) -
 -         new_tab_button_->height();
 +  return std::max(0, GetContentsBounds().height() - tabs::kVerticalTabHeight -
-+                         8 - (state_ != State::kCollapsed ? 84 : 0) -
++                         8 - (state_ != State::kCollapsed ? 84 : 40) -
++                         (sidecar_favorites_ ? sidecar::FavoritesHeightForWidth(
++                                                   sidecar_favorites_,
++                                                   GetContentsBounds().width())
++                                             : 0) -
 +                         3 * tabs::kVerticalTabsSpacing);
  }
  
  void BraveVerticalTabStripRegionView::ResetExpandedWidth() {
-@@ -1209,8 +1316,8 @@ bool BraveVerticalTabStripRegionView::IsFloatingEnabledForBrowserFullscreen()
+@@ -1209,8 +1362,8 @@ bool BraveVerticalTabStripRegionView::IsFloatingEnabledForBrowserFullscreen()
  }
  
  bool BraveVerticalTabStripRegionView::IsFloatingEnabledForBrowserMode() const {
@@ -1035,14 +2276,15 @@ index c5887df11..71fc095a9 100644
  
  void BraveVerticalTabStripRegionView::UpdateFloatingStateForBrowserMode() {
 diff --git a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h
-index fcdb268f2..e3d404c1e 100644
+index fcdb268f2..6f1965612 100644
 --- a/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h
 +++ b/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h
-@@ -226,6 +226,7 @@ class BraveVerticalTabStripRegionView : public views::View,
+@@ -226,6 +226,8 @@ class BraveVerticalTabStripRegionView : public views::View,
    // TabStripRegionView with a container view. We're not sure why this is the
    // case, but this seems to fix the issue.
    // https://github.com/brave/brave-browser/issues/51719
 +  raw_ptr<views::View> sidecar_header_ = nullptr;
++  raw_ptr<views::View> sidecar_favorites_ = nullptr;
    raw_ptr<views::View> region_view_container_ = nullptr;
  
    // Separator between tabs and new tab button.
@@ -1072,6 +2314,26 @@ index 6e60f3ea4..d6b5bcf9b 100644
    }
  
    return Tab::ShouldRenderAsNormalTab();
+diff --git a/browser/ui/views/tabs/brave_tab_container.cc b/browser/ui/views/tabs/brave_tab_container.cc
+index 768830f75..2a13f0b59 100644
+--- a/browser/ui/views/tabs/brave_tab_container.cc
++++ b/browser/ui/views/tabs/brave_tab_container.cc
+@@ -4,6 +4,7 @@
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "brave/browser/ui/views/tabs/brave_tab_container.h"
++#include "brave/browser/ui/sidecar_favorites.h"
+ 
+ #include <algorithm>
+ #include <initializer_list>
+@@ -301,6 +302,7 @@ void BraveTabContainer::EnterTabClosingMode(std::optional<int> override_width,
+ }
+ 
+ bool BraveTabContainer::ShouldTabBeVisible(const Tab* tab) const {
++  if (ShouldShowVerticalTabs() && sidecar::IsFavoriteTab(tab->tab_handle().Get())) return false;
+   auto scroll_direction = GetScrollDirection();
+   if (scroll_direction == views::LayoutOrientation::kVertical) {
+     // Dragging or detached tabs should always be visible regardless of pinned
 diff --git a/browser/ui/views/tabs/brave_tab_strip.cc b/browser/ui/views/tabs/brave_tab_strip.cc
 index 23b9c5492..aee6efeb1 100644
 --- a/browser/ui/views/tabs/brave_tab_strip.cc
@@ -1103,6 +2365,31 @@ index 23b9c5492..aee6efeb1 100644
  }
  
  void BraveTabStrip::UpdateOrientation() {
+diff --git a/chromium_src/chrome/browser/ui/views/tabs/tab_strip_layout_helper.cc b/chromium_src/chrome/browser/ui/views/tabs/tab_strip_layout_helper.cc
+index 57f79468b..d91ce647c 100644
+--- a/chromium_src/chrome/browser/ui/views/tabs/tab_strip_layout_helper.cc
++++ b/chromium_src/chrome/browser/ui/views/tabs/tab_strip_layout_helper.cc
+@@ -6,6 +6,8 @@
+ #include "chrome/browser/ui/views/tabs/tab_strip_layout_helper.h"
+ 
+ #include "base/check.h"
++#include "brave/browser/ui/sidecar_favorites.h"
++#include "chrome/browser/ui/views/tabs/tab.h"
+ #include "brave/browser/ui/views/tabs/brave_tab_strip.h"
+ 
+ #define CalculateTabBounds                                      \
+@@ -33,6 +35,11 @@ bool TabStripLayoutHelper::FillGroupInfo(
+ 
+   for (auto i = 0u; i < tab_widths.size(); i++) {
+     auto& tab_width_constraints = tab_widths.at(i);
++    if (slots_.at(i).type == TabSlotView::ViewType::kTab &&
++        sidecar::IsFavoriteTab(static_cast<Tab*>(slots_.at(i).view.get())->tab_handle().Get())) {
++      // The Favorites grid owns this tab's visible representation.
++      tab_width_constraints.state().set_open(TabOpen::kClosed);
++    }
+     tab_width_constraints.set_is_tab_in_group(
+         slots_.at(i).type == TabSlotView::ViewType::kTab &&
+         slots_.at(i).view->group().has_value());
 diff --git a/components/brave_blank_page/resources/brave_blank_new_tab.html b/components/brave_blank_page/resources/brave_blank_new_tab.html
 index 239ede580..6ed2c93ca 100644
 --- a/components/brave_blank_page/resources/brave_blank_new_tab.html
