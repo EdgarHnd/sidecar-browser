@@ -142,3 +142,30 @@ Favorites are limited to 12 HTTP(S) pages per profile. Ordinary pins are not
 automatically converted. Favorites are shared between windows of the same
 profile; each window opens its own live tab when needed. Spaces and folders
 remain future work. This is a development build, not release certification.
+
+
+## October 27 — profile and session recovery
+
+The existing Sidecar profile remained on disk and was the profile used by the
+launcher. Its previous 12-tab window was available in Recently Closed. Restoring
+that window exposed a development assertion: BrowserView reported the outer
+contents container size, including Brave's one-pixel outline, while WebContents
+reported the inner viewport (a two-pixel difference in both dimensions).
+BraveBrowserView now reports the container's content bounds. The assertion and
+other browser checks remain enabled.
+
+The launcher now requests the previous session with `--restore-last-session`
+instead of an explicit new-tab URL. A launcher regression test verifies that it
+uses the existing Sidecar profile without requesting a blank page; another
+checks that session restoration still respects the upstream-version guard.
+
+Validation: native compilation succeeded, all 49 targeted native tests and all
+24 Python safeguards passed. The previously closed window restored successfully
+with 12 tabs and ten pins. A subsequent clean quit and guarded relaunch preserved
+all 12 tabs and ten pins. An ignored local recovery copy of session files was
+saved before the repair. Original Brave was not modified.
+
+Profile presence and tab recovery do not prove login continuity. Sidecar's cookie
+store contained fewer records than original Brave; the cause and continued
+availability of individual site sessions remain unverified. No cookies or
+credentials were decrypted or replaced during this recovery.

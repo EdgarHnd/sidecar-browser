@@ -1405,10 +1405,10 @@ index 000000000..3cd090977
 +}  // namespace sidecar
 +#endif
 diff --git a/browser/ui/views/frame/brave_browser_view.cc b/browser/ui/views/frame/brave_browser_view.cc
-index 5c4003575..3556f048d 100644
+index 5c4003575..bcb984772 100644
 --- a/browser/ui/views/frame/brave_browser_view.cc
 +++ b/browser/ui/views/frame/brave_browser_view.cc
-@@ -18,9 +18,11 @@
+@@ -18,6 +18,7 @@
  #include "base/functional/bind.h"
  #include "base/task/sequenced_task_runner.h"
  #include "brave/browser/brave_browser_features.h"
@@ -1416,18 +1416,22 @@ index 5c4003575..3556f048d 100644
  #include "brave/browser/sparkle_buildflags.h"
  #include "brave/browser/translate/brave_translate_utils.h"
  #include "brave/browser/ui/brave_browser.h"
+@@ -30,6 +31,7 @@
+ #include "brave/browser/ui/sidebar/sidebar_controller.h"
+ #include "brave/browser/ui/sidebar/sidebar_utils.h"
+ #include "brave/browser/ui/sidebar/sidebar_web_panel_controller.h"
 +#include "brave/browser/ui/sidecar_browser_controls.h"
- #include "brave/browser/ui/color/brave_color_id.h"
- #include "brave/browser/ui/commands/accelerator_service.h"
- #include "brave/browser/ui/commands/accelerator_service_factory.h"
-@@ -77,6 +79,7 @@
- #include "chrome/browser/ui/tabs/features.h"
- #include "chrome/browser/ui/views/frame/browser_frame_view.h"
- #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "brave/browser/ui/tabs/brave_tab_prefs.h"
+ #include "brave/browser/ui/tabs/public/vertical_tab_controller.h"
+ #include "brave/browser/ui/views/brave_actions/brave_actions_container.h"
+@@ -84,6 +86,7 @@
+ #include "chrome/browser/ui/views/frame/multi_contents_view.h"
+ #include "chrome/browser/ui/views/frame/top_container_view.h"
+ #include "chrome/browser/ui/views/side_panel/side_panel.h"
 +#include "chrome/browser/ui/views/tab_contents/chrome_web_contents_view_focus_helper.h"
- #include "chrome/browser/ui/views/frame/browser_widget.h"
- #include "chrome/browser/ui/views/frame/contents_web_view.h"
- #include "chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.h"
+ #include "chrome/browser/ui/views/tab_search_bubble_host.h"
+ #include "chrome/browser/ui/views/tabs/shared/tab_strip_combo_button.h"
+ #include "chrome/browser/ui/views/tabs/shared/tab_strip_flat_edge_button.h"
 @@ -325,6 +328,9 @@ bool BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
  BraveBrowserView::BraveBrowserView(BrowserWindowInterface* browser)
      : BrowserView(browser) {
@@ -1446,7 +1450,23 @@ index 5c4003575..3556f048d 100644
      focus_mode_observation_.Observe(controller);
  
      if (features::kFocusModeUrlDisplay.Get() ==
-@@ -1184,11 +1191,24 @@ void BraveBrowserView::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -1120,6 +1127,15 @@ BraveMultiContentsView* BraveBrowserView::GetBraveMultiContentsView() const {
+   return BraveMultiContentsView::From(multi_contents_view_);
+ }
+ 
++gfx::Size BraveBrowserView::GetContentsSize() const {
++  // Brave's page outline is outside the renderer viewport. Session restore
++  // compares this size with WebContents, which excludes that border.
++  DCHECK(initialized_);
++  return multi_contents_view_->GetActiveContentsContainerView()
++      ->GetContentsBounds()
++      .size();
++}
++
+ bool BraveBrowserView::ShouldShowWindowTitle() const {
+   if (BrowserView::ShouldShowWindowTitle()) {
+     return true;
+@@ -1184,11 +1200,25 @@ void BraveBrowserView::OnActiveTabChanged(content::WebContents* old_contents,
                                            content::WebContents* new_contents,
                                            int index,
                                            int reason) {
@@ -1461,9 +1481,10 @@ index 5c4003575..3556f048d 100644
 +    const auto& url = new_contents->GetVisibleURL();
 +    if ((url.SchemeIs("chrome") || url.SchemeIs("brave")) &&
 +        url.host() == "newtab") {
-+      if (auto* focus = ChromeWebContentsViewFocusHelper::FromWebContents(
-+              new_contents)) {
-+        focus->SetStoredFocusView(multi_contents_view_->GetActiveContentsView());
++      if (auto* focus =
++              ChromeWebContentsViewFocusHelper::FromWebContents(new_contents)) {
++        focus->SetStoredFocusView(
++            multi_contents_view_->GetActiveContentsView());
 +      }
 +      if (GetWidget()->IsActive()) {
 +        new_contents->Focus();
@@ -1474,7 +1495,7 @@ index 5c4003575..3556f048d 100644
    ObserveBookmarkTabHelper(new_contents);
    active_tab_will_discard_contents_subscription_ = {};
    active_tab_will_detach_subscription_ = {};
-@@ -1208,11 +1228,8 @@ void BraveBrowserView::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -1208,11 +1238,8 @@ void BraveBrowserView::OnActiveTabChanged(content::WebContents* old_contents,
    // (e.g. when switching between an https tab and an http tab).
    UpdateFocusModeState();
  
@@ -1488,7 +1509,7 @@ index 5c4003575..3556f048d 100644
  
    // Update UI after active tab changing is handled because
    // ShouldUseBraveWebViewRoundedCornersForContents() check split view UI for
-@@ -1452,6 +1469,13 @@ void BraveBrowserView::UpdateFocusModeState() {
+@@ -1452,6 +1479,13 @@ void BraveBrowserView::UpdateFocusModeState() {
  }
  
  bool BraveBrowserView::ShouldDisableFocusModeForActiveTab() const {
@@ -1502,6 +1523,18 @@ index 5c4003575..3556f048d 100644
    auto* location_bar = GetLocationBar();
    if (!location_bar) {
      return true;
+diff --git a/browser/ui/views/frame/brave_browser_view.h b/browser/ui/views/frame/brave_browser_view.h
+index da8dec0a0..aea5854a2 100644
+--- a/browser/ui/views/frame/brave_browser_view.h
++++ b/browser/ui/views/frame/brave_browser_view.h
+@@ -127,6 +127,7 @@ class BraveBrowserView : public BrowserView,
+ #endif
+ 
+   // BrowserView overrides:
++  gfx::Size GetContentsSize() const override;
+   void StartTabCycling() override;
+   views::View* GetAnchorViewForBraveVPNPanel();
+   gfx::Rect GetShieldsBubbleRect() override;
 diff --git a/browser/ui/views/frame/vertical_tabs/BUILD.gn b/browser/ui/views/frame/vertical_tabs/BUILD.gn
 index 7de8ab7e5..741387dac 100644
 --- a/browser/ui/views/frame/vertical_tabs/BUILD.gn

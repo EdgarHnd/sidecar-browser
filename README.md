@@ -26,7 +26,7 @@ Those checks do not compile the full browser or certify a distributable release.
 - Favorites live in a persistent icon grid above ordinary pins, with saved-URL
   reset, ordering, and Cmd+T integration.
 - The native development app compiled and launched; all 49 targeted native
-  tests passed on October 27, 2026, along with 22 Python safeguard tests.
+  tests passed on October 27, 2026, along with 24 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches
@@ -73,8 +73,9 @@ priority. `python3 scripts/develop.py launch` uses a dedicated
 development profile and an isolated app identity, and requires a current online source
 check. It launches the development app through macOS LaunchServices so system
 authorization UI uses the normal foreground app context. Separate per-launch
-stdout/stderr logs are saved under `work/app-logs/`. The regular Brave app is
-unchanged.
+stdout/stderr logs are saved under `work/app-logs/`. Launch resumes the previous
+session in the existing Sidecar profile without requesting a new blank tab.
+The regular Brave app is unchanged.
 
 ## Arc-inspired direction
 

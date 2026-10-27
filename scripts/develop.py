@@ -139,7 +139,7 @@ def execute(command, checkout, lock):
              "--stdout", str(log_dir / (stamp + ".stdout.log")),
              "--stderr", str(log_dir / (stamp + ".stderr.log")),
              "--args", "--user-data-dir=" + str(WORK / "sidecar-profile"),
-             "--no-first-run", "--no-default-browser-check", "chrome://newtab/"],
+             "--no-first-run", "--no-default-browser-check", "--restore-last-session"],
             check=True)
         print("Launched Sidecar through macOS with its isolated development profile.")
 
