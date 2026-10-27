@@ -69,3 +69,30 @@ class PatchTests(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             validate(self.root, self.lock, self.patch)
         self.assertEqual((self.root / "shell.txt").read_text(), "old\n")
+
+    def test_binary_patch_scope_and_applied_content_are_verified(self):
+        icon = self.root / "app icon.bin"
+        original = bytes(range(256))
+        replacement = b"new-icon\0" + original[::-1]
+        icon.write_bytes(original)
+        git(self.root, "add", icon.name)
+        git(self.root, "-c", "user.name=Test", "-c", "user.email=test@localhost",
+            "-c", "commit.gpgsign=false", "commit", "-qm", "binary fixture")
+        self.lock["brave_core_commit"] = git(self.root, "rev-parse", "HEAD")
+        icon.write_bytes(replacement)
+        binary_patch = subprocess.check_output(
+            ["git", "-C", str(self.root), "diff", "--binary", "HEAD", "--", icon.name])
+        self.patch.write_bytes(self.patch.read_bytes() + binary_patch)
+        icon.write_bytes(original)
+        self.lock["patch_sha256"] = hashlib.sha256(self.patch.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, "file scope"):
+            validate(self.root, self.lock, self.patch)
+        self.lock["patch_files"].append(icon.name)
+        validate(self.root, self.lock, self.patch)
+        self.assertEqual(icon.read_bytes(), original)
+        git(self.root, "apply", str(self.patch))
+        self.assertEqual(icon.read_bytes(), replacement)
+        verify_applied(self.root, self.lock, self.patch.read_bytes())
+        icon.write_bytes(replacement + b"tampered")
+        with self.assertRaisesRegex(ValueError, "Source contents"):
+            verify_applied(self.root, self.lock, self.patch.read_bytes())

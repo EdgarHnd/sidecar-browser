@@ -169,3 +169,27 @@ Profile presence and tab recovery do not prove login continuity. Sidecar's cooki
 store contained fewer records than original Brave; the cause and continued
 availability of individual site sessions remain unverified. No cookies or
 credentials were decrypted or replaced during this recovery.
+
+
+## October 27 — Tangerine application icon
+
+The selected Tangerine Pod image is saved under assets/branding. The macOS
+packaging script produced 16–1024 pixel representations, app.icns, and a named
+AppIcon asset catalog with Xcode actool. Both development-channel resources
+are preserved in a fourth, checksum-verified binary patch. The patch scope
+validator now reads Git's numstat metadata so binary changes receive the same
+scope checks as text changes. A regression test covers a mixed text/binary
+patch, an omitted binary path, exact application, and subsequent tampering.
+
+Validation: incremental native build succeeded in 13 steps; all 49 targeted
+native tests and all 25 Python safeguards passed. Both app.icns and Assets.car
+in the rebuilt application match the packaged assets byte for byte. The
+64-pixel representation was visually inspected. The guarded launcher reopened
+Sidecar using the existing profile, showing its seven saved Favorites and
+remaining ordinary pinned tab. The app was already closed before this update;
+no profile import, replacement, or tab cleanup was performed.
+
+Direct Dock inspection through macOS automation timed out, so a live Dock
+pixel check is not recorded. The app bundle resources and icon identifiers
+(CFBundleIconFile and CFBundleIconName) were verified. In-browser Brave brand
+marks are outside this app-icon change.

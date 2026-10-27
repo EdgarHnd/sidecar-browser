@@ -25,8 +25,10 @@ Those checks do not compile the full browser or certify a distributable release.
   Ordinary tabs still close normally.
 - Favorites live in a persistent icon grid above ordinary pins, with saved-URL
   reset, ordering, and Cmd+T integration.
+- The Tangerine Pod app icon is packaged in both macOS icon formats and kept
+  in the verified development branding patch. See `assets/branding/README.md`.
 - The native development app compiled and launched; all 49 targeted native
-  tests passed on October 27, 2026, along with 24 Python safeguard tests.
+  tests passed on October 27, 2026, along with 25 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches

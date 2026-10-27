@@ -31,6 +31,12 @@ def git(checkout, *args):
     return subprocess.check_output(["git", "-C", str(checkout), *args], text=True).strip()
 
 
+def patch_paths(checkout, patch):
+    # Git's metadata parser includes binary patches, which have no +++ header.
+    stats = git(checkout, "apply", "--numstat", "-z", str(patch))
+    return [entry.split("\t", 2)[2] for entry in stats.split("\0") if entry]
+
+
 def validate(checkout, lock, patch):
     if git(checkout, "rev-parse", "HEAD") != lock["brave_core_commit"]:
         raise ValueError("Source commit differs from the reviewed pin; rebase and review first")
@@ -38,10 +44,7 @@ def validate(checkout, lock, patch):
         raise ValueError("Tracked source has changes; preserve/review them before applying")
     if hashlib.sha256(patch.read_bytes()).hexdigest() != lock["patch_sha256"]:
         raise ValueError("Patch checksum differs from the reviewed manifest")
-    paths = []
-    for line in patch.read_text().splitlines():
-        if line.startswith("+++ b/"):
-            paths.append(line[6:])
+    paths = patch_paths(checkout, patch)
     if sorted(paths) != sorted(lock["patch_files"]):
         raise ValueError("Patch file scope differs from the reviewed manifest")
     git(checkout, "apply", "--check", str(patch))
