@@ -1,8 +1,14 @@
+import io
+import json
 import sys
+import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import upstream
 from upstream import check, resolve_commit, version
 
 
@@ -58,6 +64,20 @@ class UpstreamTests(unittest.TestCase):
     def test_rejects_invalid_object_id(self):
         with self.assertRaises(ValueError):
             check(self.lock, self.api(sha="bad"))
+
+    def test_fresh_clone_without_build_receipt_keeps_source_result(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "upstream-lock.json").write_text(json.dumps(self.lock))
+            output = root / "status.json"
+            with patch.object(upstream, "ROOT", root), \
+                    patch.object(upstream, "check", return_value={"source_status": "current"}), \
+                    patch.object(sys, "argv", ["upstream.py", "--output", str(output)]), \
+                    redirect_stdout(io.StringIO()):
+                self.assertEqual(upstream.main(), 0)
+            status = json.loads(output.read_text())
+        self.assertEqual(status["source_status"], "current")
+        self.assertEqual(status["artifact_status"], "not-built")
 
 
 if __name__ == "__main__":

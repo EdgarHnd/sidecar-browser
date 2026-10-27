@@ -3,7 +3,6 @@
 import argparse
 import datetime
 import fcntl
-import hashlib
 import json
 import os
 import plistlib
@@ -11,7 +10,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from patches import DEFAULT_CHECKOUT, ROOT, WORK, git, validate, patch_bundle
+from patches import DEFAULT_CHECKOUT, ROOT, WORK, git, validate, patch_bundle, verify_applied
 from upstream import check
 
 STATE = ROOT / "build-state.json"
@@ -26,38 +25,6 @@ def update_state(**fields):
     tmp = STATE.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2) + "\n")
     tmp.replace(STATE)
-
-
-def verify_applied(checkout, lock, content=None):
-    if content is None:
-        content = patch_bundle(lock)
-    if git(checkout, "rev-parse", "HEAD") != lock["brave_core_commit"]:
-        raise ValueError("Wrong Brave source pin")
-    if hashlib.sha256(content).hexdigest() != lock["patch_sha256"]:
-        raise ValueError("Patch checksum changed")
-    if git(checkout, "diff", "--cached", "--name-only"):
-        raise ValueError("Unexpected staged source changes")
-    changed = git(checkout, "diff", "--name-only", "HEAD").splitlines()
-    if sorted(changed) != sorted(lock["patch_files"]):
-        raise ValueError("Changed source file scope differs from the reviewed patch")
-    # Compare file contents, not Git's choice of diff hunk boundaries.
-    with tempfile.TemporaryDirectory() as temp:
-        root = Path(temp).resolve()
-        for name in lock["patch_files"]:
-            file = (root / name).resolve()
-            if not file.is_relative_to(root):
-                raise ValueError("Invalid source path in manifest")
-            original = subprocess.run(["git", "-C", str(checkout), "show", "HEAD:" + name],
-                                      capture_output=True, check=False)
-            if original.returncode == 0:
-                file.parent.mkdir(parents=True, exist_ok=True)
-                file.write_bytes(original.stdout)
-        patch = root / "reviewed.patch"
-        patch.write_bytes(content)
-        git(root, "apply", str(patch))
-        for name in lock["patch_files"]:
-            if (root / name).read_bytes() != (checkout / name).read_bytes():
-                raise ValueError("Source contents differ from the reviewed patch: " + name)
 
 
 def run(checkout, *args):

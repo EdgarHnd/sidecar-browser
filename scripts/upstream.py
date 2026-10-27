@@ -69,13 +69,23 @@ def check(lock, fetch=fetch_json):
     }
 
 
+def artifact_status():
+    # Local build receipts are optional; a fresh clone has none.
+    try:
+        return json.loads((ROOT / "build-state.json").read_text())
+    except FileNotFoundError:
+        return "not-built"
+    except (OSError, ValueError):
+        return "unreadable"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "upstream-status.json")
     args = parser.parse_args()
     try:
         status = check(json.loads((ROOT / "upstream-lock.json").read_text()))
-        status["artifact_status"] = json.loads((ROOT / "build-state.json").read_text())
+        status["artifact_status"] = artifact_status()
         code = 0 if status["source_status"] == "current" else 1
     except Exception as error:
         status = {"source_status": "unknown", "error": str(error),

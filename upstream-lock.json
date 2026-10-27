@@ -7,20 +7,15 @@
   "brave_core_commit": "52db4b25c0aa3038e9a1c6021428b136cc3cb5fc",
   "chromium_version": "156.0.8078.48",
   "release_url": "https://github.com/brave/brave-browser/releases/tag/v1.98.60",
-  "patch_sha256": "64e17ae1c7bc1f8e40005885a7c285f094ec08d4dda9bd8c96a25c487f2b0aa1",
+  "patch_sha256": "9cd6dfdb33e3838793c915622c01d2435e0a50bf727e12126b5b0f13113daa7b",
   "patch_files": [
+    "BUILD.gn",
     "app/theme/brave/BRANDING.development",
-    "browser/ui/tabs/brave_tab_prefs.cc",
-    "browser/ui/tabs/brave_tab_prefs.h",
-    "browser/ui/tabs/test/vertical_tab_controller_unittest.cc",
-    "browser/ui/views/tabs/brave_tab_strip_layout_helper.h",
-    "browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc",
+    "app/theme/brave/mac/development/Assets.car",
+    "app/theme/brave/mac/development/app.icns",
     "browser/mac/sidecar_update_feed.h",
     "browser/mac/sparkle_glue.mm",
     "browser/sources.gni",
-    "build/config.gni",
-    "BUILD.gn",
-    "build/mac/tweak_info_plist.py",
     "browser/ui/BUILD.gn",
     "browser/ui/brave_browser_command_controller.cc",
     "browser/ui/sidecar_browser_controls.cc",
@@ -28,7 +23,11 @@
     "browser/ui/sidecar_browser_controls_unittest.cc",
     "browser/ui/sidecar_favorites.cc",
     "browser/ui/sidecar_favorites.h",
+    "browser/ui/tabs/brave_tab_prefs.cc",
+    "browser/ui/tabs/brave_tab_prefs.h",
+    "browser/ui/tabs/test/vertical_tab_controller_unittest.cc",
     "browser/ui/views/frame/brave_browser_view.cc",
+    "browser/ui/views/frame/brave_browser_view.h",
     "browser/ui/views/frame/vertical_tabs/BUILD.gn",
     "browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.cc",
     "browser/ui/views/frame/vertical_tabs/sidecar_favorites_view.h",
@@ -37,13 +36,13 @@
     "browser/ui/views/tabs/brave_tab.cc",
     "browser/ui/views/tabs/brave_tab_container.cc",
     "browser/ui/views/tabs/brave_tab_strip.cc",
+    "browser/ui/views/tabs/brave_tab_strip_layout_helper.h",
+    "browser/ui/views/tabs/brave_tab_strip_layout_helper_unittest.cc",
+    "build/config.gni",
+    "build/mac/tweak_info_plist.py",
     "chromium_src/chrome/browser/ui/views/tabs/tab_strip_layout_helper.cc",
-    "components/brave_blank_page/resources/brave_blank_new_tab.html",
-    "browser/ui/views/frame/brave_browser_view.h",
-    "app/theme/brave/mac/development/app.icns",
-    "app/theme/brave/mac/development/Assets.car"
+    "components/brave_blank_page/resources/brave_blank_new_tab.html"
   ],
-  "artifact_status": "not-built",
   "patches": [
     {
       "file": "patches/0001-sidecar-development-shell.patch",
@@ -51,7 +50,7 @@
     },
     {
       "file": "patches/0002-native-update-feed.patch",
-      "sha256": "8a738696b243b1290909c493c7d94a7765fc3b455f1889c27541c1f2aaf19bec"
+      "sha256": "f601416c8cb4ab656eb36abae7c79d9cf91a2b07758656bd40cf7c523faac610"
     },
     {
       "file": "patches/0003-sidecar-browser-controls.patch",

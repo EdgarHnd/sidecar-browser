@@ -28,7 +28,7 @@ Those checks do not compile the full browser or certify a distributable release.
 - The Tangerine Pod app icon is packaged in both macOS icon formats and kept
   in the verified development branding patch. See `assets/branding/README.md`.
 - The native development app compiled and launched; all 49 targeted native
-  tests passed on October 27, 2026, along with 26 Python safeguard tests.
+  tests passed on October 27, 2026, along with 29 Python safeguard tests.
 - A source-release tracker that detects newer releases and retagged commits,
   rejects prereleases/rollback, and reports unknown when the network fails.
 - A patch guard that refuses the wrong base, modified source, altered patches
@@ -60,6 +60,12 @@ python3 scripts/patches.py
 `upstream.py` exits 0 for matching source, 1 for an update or changed tag, and 2
 for an unknown result. A matching source pin is **not** evidence that an
 installed browser is updated, tested, or safe.
+
+After editing source in the patched checkout, regenerate the patch series and
+manifest with `python3 scripts/patches.py --export`. Each changed file stays in
+the patch that already carries it; place a new file with
+`--assign path/in/brave-core patches/000N-….patch`. Nothing is written unless
+the regenerated series reproduces the checkout exactly.
 
 `python3 scripts/develop.py bootstrap` performs initialization,
 patch application, build and tests in order, stopping on the first failure.

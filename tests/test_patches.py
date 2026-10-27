@@ -4,8 +4,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+PROJECT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT / "scripts"))
+import patches
 from patches import git, validate
 from develop import verify_applied
 
@@ -96,3 +99,31 @@ class PatchTests(unittest.TestCase):
         icon.write_bytes(replacement + b"tampered")
         with self.assertRaisesRegex(ValueError, "Source contents"):
             verify_applied(self.root, self.lock, self.patch.read_bytes())
+
+    def test_export_rewrites_series_and_requires_new_files_to_be_assigned(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp).resolve()
+            (project / "patches").mkdir()
+            name = "patches/0001-shell.patch"
+            (project / name).write_bytes(self.patch.read_bytes())
+            lock = dict(self.lock, patches=[{"file": name, "sha256": self.lock["patch_sha256"]}])
+            git(self.root, "apply", str(self.patch))
+            (self.root / "shell.txt").write_text("newer\n")
+            (self.root / "added.txt").write_text("added\n")
+            git(self.root, "add", "--intent-to-add", "added.txt")
+            with mock.patch.object(patches, "ROOT", project):
+                with self.assertRaisesRegex(ValueError, "added.txt"):
+                    patches.export(self.root, lock)
+                exported, data = patches.export(self.root, lock, [("added.txt", name)])
+                self.assertEqual(lock["patch_files"], ["shell.txt"])
+                self.assertEqual(exported["patch_files"], ["added.txt", "shell.txt"])
+                (project / name).write_bytes(data[name])
+                verify_applied(self.root, exported)
+
+    def test_native_feed_header_matches_shipped_patch(self):
+        # CI compiles native/; the browser builds the copy inside patch 0002.
+        name = "browser/mac/sidecar_update_feed.h"
+        git(self.root, "apply", "--include=" + name,
+            str(PROJECT / "patches/0002-native-update-feed.patch"))
+        self.assertEqual((self.root / name).read_bytes(),
+                         (PROJECT / "native/sidecar_update_feed.h").read_bytes())
